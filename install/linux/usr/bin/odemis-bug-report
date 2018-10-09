@@ -1,135 +1,515 @@
-#!/bin/bash
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Created on 8 October 2018
 
-. /etc/odemis.conf
+@author: Philip Winkler, Éric Piel
 
-export PYTHONPATH
+Copyright © 2018 Philip Winkler, Éric Piel, Delmic
 
-# filename is %hostname-odemis-log-%date.zip
-# Zip is nice, because it's very fast add files
-bn="$(hostname)-odemis-log-$(date +%Y%m%d-%H%M%S).zip"
-fn="$HOME/Desktop/$bn"
+This file is part of Odemis.
 
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License version 2 as published by the Free Software Foundation.
 
-# Call the MODEL_SELECTOR if needed
-if [ -z "$MODEL" -a -n "MODEL_SELECTOR" ]; then
-    MODEL=("$($MODEL_SELECTOR)")
-    if [ "$?" -ne 0 ]; then
-       # Just pick every potential microscope models
-       MODEL=("$CONFIGPATH/"*.odm.yaml)
-    fi
-else
-    MODEL=("$MODEL") # Convert into an array of one
-fi
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License for more details.
 
+You should have received a copy of the GNU General Public License along with Odemis. If not,
+see http://www.gnu.org/licenses/.
 
-# Compress in background
-# (Only displays a warning if a file doesn't exists)
-zip -jr $fn /var/log/odemis.log $HOME/odemis-gui.log $HOME/odemis-gui.log.1 "${MODEL[@]}" /etc/odemis.conf /var/log/syslog $HOME/odemis-mic-selector.log &
+"""
 
+from __future__ import division, absolute_import, print_function
 
-# Take a screenshot if the GUI is there
-if pgrep -f $GUI > /dev/null; then
-    scfn="/tmp/odemis-bug-screenshot.png"
-    gm import -window root "$scfn"
-    # Only available in Ubuntu 14.04+ (a bit better because you see a "flash")
-    # gnome-screenshot -f "$scfn"
-else
-    scfn=""
-fi
+import argparse
+import logging
+import os
+import re
+import shlex
+import sys
+import time
 
-# Save hw status (if available)
-# TODO: also do this in background (especially, it can block for a long time if
-# the backend is in some weird state)
-odemis-cli --check
-status=$?
-if [ $status -eq 0 -o $status -eq 3 ] ; then
-    hwfn="/tmp/odemis-hw-status.txt"
-    timeout -k 10 60 odemis-cli --list-prop '*' > "$hwfn" &
-else
-    hwfn=""
-fi
+import wx
+import ConfigParser
+from odemis.util.driver import get_backend_status, BACKEND_RUNNING
+import zipfile
+import os
+import socket
+from odemis.gui.util import get_home_folder
+from datetime import datetime
+from concurrent import futures
+import platform
+from glob import glob
+import subprocess
+from concurrent.futures._base import TimeoutError
+from wx import EVT_BUTTON
 
+logging.getLogger().setLevel(logging.DEBUG)
 
-# TODO: auto-complete contact person from the last bug report?
-# Ask to describe the problem (in the mean time)
-descfn="/tmp/description.txt"
-zenity --text-info --editable --width 800 --height 800 --title "Enter problem description" >"$descfn" <<EOL
-Summary of the problem:
-
-Contact person (name and email address):
-
-Ways to reproduce the problem:
-1.
-2.
-3.
-:
-
-Current behaviour:
-
-Expected behaviour:
+DEFAULT_CONFIG = {"LOGLEVEL": "1",
+                  "TERMINAL": "/usr/bin/gnome-terminal"}
 
 
-Additional information (eg, reproducibility, severity):
+def _add_var_config(config, var, content):
+    """ Add one variable to the config, handling substitution
 
-EOL
-ret="$?"
+    Args:
+        config: (dict) Configuration to add the found values to
+        var: (str) The name of the variable
+        content: (str) Value of the variable
 
-# wait for zip to be done
-echo "Waiting for zip to be done..."
-wait | zenity --progress --pulsate --no-cancel --auto-close --text="Waiting for zip to be done..."
+    Returns:
+        dict: The `config` dictionary is returned with the found values added
 
-if [ "$ret" -eq 1 ]; then # cancelled
-    rm $fn
-    exit
-fi
+    """
 
+    # variable substitution
+    m = re.search(r"(\$\w+)", content)
+    while m:
+        subvar = m.group(1)[1:]
+        # First try to use a already known variable, and fallback to environ
+        try:
+            subcont = config[subvar]
+        except KeyError:
+            try:
+                subcont = os.environ[subvar]
+            except KeyError:
+                logging.warning("Failed to find variable %s", subvar)
+                subcont = ""
+        # substitute (might do several at a time, but it's fine)
+        content = content.replace(m.group(1), subcont)
+        m = re.search(r"(\$\w+)", content)
 
-# Add the latest overlay-report if it's possibly related (ie, less than a day old)
-LAST_OVERLAY_REP=$(ls -dt ~/odemis-overlay-report/* | head -1)
-if [ -n "$LAST_OVERLAY_REP" ]; then
-    if [ $(find "$LAST_OVERLAY_REP" -maxdepth 0 -mtime +1 | wc -l) -gt 0 ]; then
-       LAST_OVERLAY_REP="" # Too old
-    fi
-fi
-
-# Add the latest DELPHI calibration report if it's possibly related (ie, less than a day old)
-LAST_DELPHI_CALIB_REP=$(ls -dt ~/delphi-calibration-report/* | head -1)
-if [ -n "$LAST_DELPHI_CALIB_REP" ]; then
-    if [ $(find "$LAST_DELPHI_CALIB_REP" -maxdepth 0 -mtime +1 | wc -l) -gt 0 ]; then
-       LAST_DELPHI_CALIB_REP="" # Too old
-    fi
-fi
-
-# Add the description, other files generated during entry, and folders (which are
-# add recursively, and not added at all if they don't exist)
-# (no quotes for the variables which could be empty so they become nothing)
-# On 16.04, with the latest file-roller, you can just do this:
-#file-roller --add "$descfn" $hwfn $scfn ~/.config/odemis/ $LAST_OVERLAY_REP $LAST_DELPHI_CALIB_REP --add-to "$fn"
-
-# Adds each directory into the root of the archive
-pushd .
-for d in ~/.config/odemis/ $LAST_OVERLAY_REP $LAST_DELPHI_CALIB_REP; do
-    cd $(dirname $d)
-    zip -r $fn $(basename $d)
-done
-popd
-
-zip -j $fn "$descfn" $hwfn $scfn
+    logging.debug("setting %s to %s", var, content)
+    config[var] = content
 
 
-# Detect if there is an internet connection
-if ping -q -w 1 -c 1 support.delmic.com > /dev/null ; then
-    #zenity --info --text "Please send the file <tt>$bn</tt> on the Desktop to <tt>bugreport@delmic.com</tt>.\n\nYou can use http://delmic.wetransfer.com ." --title "Problem report ready" --no-wrap
-    zenity --info --text "Please finish the report by filling up the form on https://support.delmic.com \nand attaching the report file <tt>$bn</tt> on the Desktop.\n\nAfter closing this window, the form will automatically open in your web browser." --title "Problem report ready" --no-wrap
-    if [ $? == 0 ]; then # User pressed OK (and not closed the window)
-        # Open wetransfer
-        # Encode the (first 30 lines of) description into URL encoding for passing it also as message
-        #msgu=$(head -n 30 "$descfn" | python2 -c "import sys, urllib; print urllib.quote_plus(sys.stdin.read())")
-    #    firefox "https://delmic.wetransfer.com/?to=bugreport@delmic.com&msg=$msgu"
+def parse_config(configfile):
+    """  Parse `configfile` and return a dictionary of its values
 
-        firefox "https://support.delmic.com/open.php"
-    fi
-else
-    zenity --info --text "Please send the file <tt>$bn</tt> on the Desktop to Delmic.\n\nYou can use https://support.delmic.com or send it by email to <tt>bugreport@delmic.com</tt>." --title "Problem report ready" --no-wrap
-fi
+    The configuration file was originally designed to be parsed as a bash script. So each line looks
+    like:
 
+        VAR=$VAR2/log
+
+    Args:
+        configfile: (str) Path to the configuration file
+
+    Returns:
+        dict str->str: Config file as name of variable -> value
+
+    """
+
+    config = DEFAULT_CONFIG.copy()
+    f = open(configfile)
+    for line in shlex.split(f, comments=True):
+        tokens = line.split("=")
+        if len(tokens) != 2:
+            logging.warning("Can't parse '%s', skipping the line", line)
+        else:
+            _add_var_config(config, tokens[0], tokens[1])
+
+    return config
+
+
+def create_archive(self):
+    
+    odemis_config = parse_config("/etc/odemis.conf")
+    hostname = socket.gethostname()
+    home_dir = get_home_folder()
+    t = datetime.now().strftime("%Y%m%d-%H%M%S")
+    zip_fn = os.path.join(home_dir, '%s-odemis-log-%s.zip' % (hostname, t))
+    
+    # Save yaml file, call MODEL_SELECTOR if needed
+    if odemis_config["MODEL"]:
+        models = [odemis_config["MODEL"]]
+    elif odemis_config["MODEL_SELECTOR"]:
+        models = [subprocess.check_output(odemis_config["MODEL_SELECTOR"].rstrip().split(' '))]
+    else:
+        # just pick every potential microscope model
+        models = glob(os.path.join(odemis_config['CONFIGPATH'], '*/*.odm.yaml'))
+         
+    # Compress in background
+    files = ['/var/log/odemis.log', os.path.join(home_dir, 'odemis-gui.log'),
+             os.path.join(home_dir, 'odemis-gui.log.1'), '/etc/odemis.conf', '/var/log/syslog',  
+             os.path.join(home_dir, 'odemis-mic-selector.log')]
+    files.extend(models)
+    zipped = zipfile.ZipFile(zip_fn, "w" )
+    for f in files:
+        if os.path.isfile(f):
+            self.zipped.write(f, compress_type=zipfile.ZIP_DEFLATED)
+        else:
+            logging.warning("Bugreporter could not find file %s." % f)
+        
+    # Take a screenshot if the GUI is there
+    ret_code = subprocess.call(['pgrep', '-f', 'odemis.gui.main'])
+    if ret_code == 0:
+        scfn = "/tmp/odemis-bug-screenshot.png"
+        if platform.linux_distribution()[1][:2] > 14:
+            # Only available in Ubuntu 14.04+ (a bit better because you see a "flash")
+            subprocess.call(['gnome-screenshot', '-f', scfn])
+        else:
+            subprocess.call(['gm', 'import', '-window', 'root', scfn])
+    else:
+        scfn = ""
+
+    # Save hw status (if available)
+    ret_code = subprocess.call(['odemis-cli', '--check'])
+    if ret_code == 0 or ret_code == 3:
+        try:
+            # subprocess doesn't have timeout argument in python 2.x, so use future instead
+            executor = futures.ThreadPoolExecutor(max_workers=1)
+            f = executor.submit(subprocess.check_output, ['odemis-cli', '--list-prop'])
+            props = f.result(60)
+            hwfn = "/tmp/odemis-hw-status.txt"
+        except:
+            hfwn = ""
+
+    
+    # Add the latest overlay-report if it's possibly related (ie, less than a day old)
+    overlay_reps = glob(os.path.join(home_dir, 'odemis-overlay-report/*'))
+    if overlay_reps and (time.time() - os.path.getmtime(overlay_reps[-1])) / 3600 < 24:
+        self.zipped.write(overlay_reps[-1], compress_type=zipfile.ZIP_DEFLATED)
+    
+    # Add the latest DELPHI calibration report if it's possibly related (ie, less than a day old)
+    delphi_calib_reps = glob(os.path.join(home_dir, 'delphi-calibration-report/*'))
+    if delphi_calib_reps and (time.time() - os.path.getmtime(delphi_calib_reps[-1])) / 3600 < 24:
+        self.zipped.write(delphi_calib_reps[-1], compress_type=zipfile.ZIP_DEFLATED)
+
+    # Add the description, other files generated during entry, and folders (which are
+    # add recursively, and not added at all if they don't exist)
+    # (no quotes for the variables which could be empty so they become nothing)
+    # On 16.04, with the latest file-roller, you can just do this:
+    #file-roller --add "$descfn" $hwfn $scfn ~/.config/odemis/ $LAST_OVERLAY_REP $LAST_DELPHI_CALIB_REP --add-to "$fn"
+    
+    # Adds each directory into the root of the archive
+#     
+#     pushd .
+#     for d in ~/.config/odemis/ $LAST_OVERLAY_REP $LAST_DELPHI_CALIB_REP; do
+#         cd $(dirname $d)
+#         zip -r $fn $(basename $d)
+#     done
+#     popd
+#     file-roller --add "$descfn" $hwfn $scfn  --add-to "$fn"
+# 
+# 
+# # TODO: any way to automatically send the file?
+# # See https://github.com/predat/wetransferpy
+# 
+# zenity --info --text "Please send the file <tt>$bn</tt> on the Desktop to <tt>bugreport@delmic.com</tt>.\n\nYou can use http://delmic.wetransfer.com ." --title "Problem report ready" --no-wrap
+# if [ $? == 0 ]; then # User pressed OK (and not closed the window)
+#     # Open wetransfer
+# 
+#     # Encode the (first 30 lines of) description into URL encoding for passing it also as message
+#     msgu=$(head -n 30 "$descfn" | python2 -c "import sys, urllib; print urllib.quote_plus(sys.stdin.read())")
+# 
+#     firefox "https://delmic.wetransfer.com/?to=bugreport@delmic.com&msg=$msgu"
+# fi
+
+
+class BugreporterFrame(wx.Frame):
+
+    def __init__(self):
+
+        hostname = socket.gethostname()
+        home_dir = get_home_folder()
+        t = datetime.now().strftime("%Y%m%d-%H%M%S")
+        zip_fn = os.path.join(home_dir, '%s-odemis-log-%s.zip' % (hostname, t))
+        self.zipped = zipfile.ZipFile(zip_fn, "w")
+
+        executor = futures.ThreadPoolExecutor(max_workers=1)
+        self.zip_future = executor.submit(self.create_archive)
+
+        self.name_dict = {'abc': 'def'}
+        self.make_suggestion = True
+        super(BugreporterFrame, self).__init__(None, title="Enter the problem description", size=(800, 800))
+
+        panel = wx.Panel(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        name_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        name_lbl = wx.StaticText(panel, wx.ID_ANY, "Name:")
+        self.name_ctrl = wx.TextCtrl(panel, wx.ID_ANY, value="John Doe", size=(500, 23))
+        self.name_ctrl.Bind(wx.EVT_TEXT, self.on_key_name)
+        self.name_ctrl.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
+        self.name_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_name_entered)
+        name_sizer.Add(name_lbl, 5, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 10)
+        name_sizer.Add(self.name_ctrl, 10, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 5)
+        sizer.Add(name_sizer)
+
+        email_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        email_lbl = wx.StaticText(panel, wx.ID_ANY, "Email:")
+        self.email_ctrl = wx.TextCtrl(panel, wx.ID_ANY, value="john@example.com", size=(500, 23))
+        self.email_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_email_focus)
+        email_sizer.Add(email_lbl, 5, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 10)
+        email_sizer.Add(self.email_ctrl, 10, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 5)
+        sizer.Add(email_sizer)
+
+        summary_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        summary_lbl = wx.StaticText(panel, wx.ID_ANY, "Summary:")
+        self.summary_ctrl = wx.TextCtrl(panel, wx.ID_ANY, value="X doesn't work sometimes...", size=(500, 23))
+
+        summary_sizer.Add(summary_lbl, 5, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 10)
+        summary_sizer.Add(self.summary_ctrl, 10, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 5)
+        sizer.Add(summary_sizer)
+
+        description_sizer1 = wx.BoxSizer(wx.HORIZONTAL)
+        description_sizer2 = wx.BoxSizer(wx.HORIZONTAL)
+        description_lbl = wx.StaticText(panel, wx.ID_ANY, "Description:")
+        default_txt = ("Ways to reproduce the problem:\n1.\n2.\n3.\n\nCurrent behaviour:\n\n" +
+                       "Expected behaviour:\n\nAdditional Information (e.g. reproducibility, severity):\n")
+        self.description_ctrl = wx.TextCtrl(panel, wx.ID_ANY, value=default_txt, size=(self.GetSize()[0], 400),
+                                       style=wx.TE_MULTILINE)
+
+        description_sizer1.Add(description_lbl, 5, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 10)
+        description_sizer2.Add(self.description_ctrl, 5, wx.EXPAND | wx.ALIGN_LEFT | wx.LEFT | wx.RIGHT, 10)
+        sizer.Add(description_sizer1)
+        sizer.Add(description_sizer2)
+
+        gdpr_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        gdpr_text = ("When reporting an issue, technical data from the computer will be sent " +
+            "to Delmic B.V. In addition to your name and email address, the data can " +
+            "also contain some identifiable information about your work (e.g, " +
+            "filenames of acquisitions). The sole purpose of collecting this data " +
+            "is to diagnose issues and improve the quality of the system. The data may " +
+            "be stored up to five years. The data will always be stored confidentially, " +
+            "and never be shared with any third parties or used for any commercial purposes.")
+        gdpr_lbl = wx.StaticText(panel, -1, gdpr_text)
+        gdpr_lbl.Wrap(gdpr_lbl.GetSize().width)
+        font = wx.Font(10, wx.NORMAL, wx.ITALIC, wx.NORMAL)
+        gdpr_lbl.SetFont(font)
+        gdpr_sizer.Add(gdpr_lbl, 10, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 10)
+        sizer.Add(gdpr_sizer, wx.EXPAND)
+
+        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        cancel_btn = wx.Button(panel, wx.ID_ANY, "Cancel")
+        cancel_btn.Bind(EVT_BUTTON, self.on_cancel_btn)
+        button_sizer.Add(cancel_btn, 0, wx.ALL, 10)
+        report_btn = wx.Button(panel, wx.ID_ANY, "Report")
+        report_btn.Bind(EVT_BUTTON, self.on_report_btn)
+        button_sizer.Add(report_btn, 0, wx.ALL, 10)
+        sizer.Add(button_sizer, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
+
+        panel.SetSizer(sizer)
+        panel.Layout()
+        self.Centre()
+        self.Show()
+        self.Layout()
+
+    def _add_var_config(config, var, content):
+        """ Add one variable to the config, handling substitution
+    
+        Args:
+            config: (dict) Configuration to add the found values to
+            var: (str) The name of the variable
+            content: (str) Value of the variable
+    
+        Returns:
+            dict: The `config` dictionary is returned with the found values added
+    
+        """
+
+        # variable substitution
+        m = re.search(r"(\$\w+)", content)
+        while m:
+            subvar = m.group(1)[1:]
+            # First try to use a already known variable, and fallback to environ
+            try:
+                subcont = config[subvar]
+            except KeyError:
+                try:
+                    subcont = os.environ[subvar]
+                except KeyError:
+                    logging.warning("Failed to find variable %s", subvar)
+                    subcont = ""
+            # substitute (might do several at a time, but it's fine)
+            content = content.replace(m.group(1), subcont)
+            m = re.search(r"(\$\w+)", content)
+
+        logging.debug("setting %s to %s", var, content)
+        config[var] = content
+
+    def parse_config(configfile):
+        """  Parse `configfile` and return a dictionary of its values
+    
+        The configuration file was originally designed to be parsed as a bash script. So each line looks
+        like:
+    
+            VAR=$VAR2/log
+    
+        Args:
+            configfile: (str) Path to the configuration file
+    
+        Returns:
+            dict str->str: Config file as name of variable -> value
+    
+        """
+
+        config = DEFAULT_CONFIG.copy()
+        f = open(configfile)
+        for line in shlex.split(f, comments=True):
+            tokens = line.split("=")
+            if len(tokens) != 2:
+                logging.warning("Can't parse '%s', skipping the line", line)
+            else:
+                _add_var_config(config, tokens[0], tokens[1])
+
+        return config
+
+    def create_archive(self):
+
+        odemis_config = parse_config("/etc/odemis.conf")
+        hostname = socket.gethostname()
+        home_dir = get_home_folder()
+        t = datetime.now().strftime("%Y%m%d-%H%M%S")
+        zip_fn = os.path.join(home_dir, '%s-odemis-log-%s.zip' % (hostname, t))
+
+        # Save yaml file, call MODEL_SELECTOR if needed
+        if odemis_config["MODEL"]:
+            models = [odemis_config["MODEL"]]
+        elif odemis_config["MODEL_SELECTOR"]:
+            models = [subprocess.check_output(odemis_config["MODEL_SELECTOR"].rstrip().split(' '))]
+        else:
+            # just pick every potential microscope model
+            models = glob(os.path.join(odemis_config['CONFIGPATH'], '*/*.odm.yaml'))
+
+        # Compress in background
+        files = ['/var/log/odemis.log', os.path.join(home_dir, 'odemis-gui.log'),
+                 os.path.join(home_dir, 'odemis-gui.log.1'), '/etc/odemis.conf', '/var/log/syslog',
+                 os.path.join(home_dir, 'odemis-mic-selector.log')]
+        files.extend(models)
+
+        for f in files:
+            if os.path.isfile(f):
+                self.zipped.write(f, compress_type=zipfile.ZIP_DEFLATED)
+            else:
+                logging.warning("Bugreporter could not find file %s." % f)
+
+        # Take a screenshot if the GUI is there
+        ret_code = subprocess.call(['pgrep', '-f', 'odemis.gui.main'])
+        if ret_code == 0:
+            scfn = "/tmp/odemis-bug-screenshot.png"
+            if platform.linux_distribution()[1][:2] > 14:
+                # Only available in Ubuntu 14.04+ (a bit better because you see a "flash")
+                subprocess.call(['gnome-screenshot', '-f', scfn])
+            else:
+                subprocess.call(['gm', 'import', '-window', 'root', scfn])
+        else:
+            scfn = ""
+
+        # Save hw status (if available)
+        ret_code = subprocess.call(['odemis-cli', '--check'])
+        if ret_code == 0 or ret_code == 3:
+            try:
+                # subprocess doesn't have timeout argument in python 2.x, so use future instead
+                executor = futures.ThreadPoolExecutor(max_workers=1)
+                f = executor.submit(subprocess.check_output, ['odemis-cli', '--list-prop'])
+                props = f.result(60)
+                hwfn = "/tmp/odemis-hw-status.txt"
+            except:
+                hfwn = ""
+
+        # Add the latest overlay-report if it's possibly related (ie, less than a day old)
+        overlay_reps = glob(os.path.join(home_dir, 'odemis-overlay-report/*'))
+        if overlay_reps and (time.time() - os.path.getmtime(overlay_reps[-1])) / 3600 < 24:
+            self.zipped.write(overlay_reps[-1], compress_type=zipfile.ZIP_DEFLATED)
+
+        # Add the latest DELPHI calibration report if it's possibly related (ie, less than a day old)
+        delphi_calib_reps = glob(os.path.join(home_dir, 'delphi-calibration-report/*'))
+        if delphi_calib_reps and (time.time() - os.path.getmtime(delphi_calib_reps[-1])) / 3600 < 24:
+            self.zipped.write(delphi_calib_reps[-1], compress_type=zipfile.ZIP_DEFLATED)
+
+    def on_key_down(self, evt):
+        if evt.GetKeyCode() == wx.WXK_BACK:
+            self.make_suggestion = False
+        else:
+            self.make_suggestion = True
+        evt.Skip()
+
+    def on_key_name(self, evt):
+
+        if self.make_suggestion:
+            full_text = self.name_ctrl.GetValue()
+            print('full', full_text)
+            if not full_text:
+                return
+
+            if self.name_ctrl.GetSelection()[0] != self.name_ctrl.GetSelection()[1]:
+                typed = full_text[:len(full_text) - self.name_ctrl.GetSelection()[0] + 1]
+            else:
+                typed = full_text
+
+            for key in self.name_dict.keys():
+                print(key.startswith(typed))
+                if key.startswith(typed):
+                    print('yes', typed, key)
+                    wx.CallAfter(self.name_ctrl.ChangeValue, key)
+                    break
+                else:
+                    wx.CallAfter(self.name_ctrl.ChangeValue, typed)
+
+            wx.CallAfter(self.name_ctrl.SetSelection,
+                         len(typed), -1)
+
+            self.Layout()
+            self.Refresh()
+    #         # if key is used --> move key up in dictionary
+
+    def on_name_entered(self, evt):
+        if self.name_ctrl.GetValue():
+            if self.name_ctrl.GetValue() in self.name_dict:
+                self.email_ctrl.ChangeValue(self.name_dict[self.name_ctrl.GetValue()])
+                
+    def on_email_focus(self, evt):
+        self.name_dict[str(self.name_ctrl.GetValue())] = self.email_ctrl.GetValue()
+
+    def on_report_btn(self, evt):
+        evt.GetEventObject().Enable(False)
+        wx.BusyCursor()
+        with open('/tmp/description.txt', 'w+') as f:
+            f.write('Name: %s\n' % self.name_ctrl.GetValue())
+            f.write('Email: %s\n' % self.email_ctrl.GetValue())
+            f.write('Summary: %s\n\n' % self.summary_ctrl.GetValue())
+            f.write('Description:\n%s' % self.description_ctrl.GetValue())
+        self.zip_future.result()
+
+        self.zipped.write('/tmp/description.txt', compress_type=zipfile.ZIP_DEFLATED)
+        import time
+        time.sleep(3)
+        self.Close()
+
+    def on_cancel_btn(self, evt):
+        pass
+
+
+def main(args):
+    # screenshot = take_screenshot()
+    # create_archive()
+    app = wx.App()
+    BugreporterFrame()
+#     frame = create_bugreport_frame()
+#     frame.Show(True)
+    app.MainLoop()
+#
+#     # TODO: auto-complete contact person from the last bug report?
+# # Ask to describe the problem (in the mean time)
+# descfn="/tmp/description.txt"
+# zenity --text-info --editable --width 800 --height 800 --title "Enter problem description" >"$descfn"
+# ret="$?"
+#
+# # wait for zip to be done
+# echo "Waiting for zip to be done..."
+# wait
+#
+# if [ "$ret" -eq 1 ]; then # cancelled
+#     rm $fn
+#     exit
+# fi
+
+    
+if __name__ == '__main__':
+    ret_code = main(sys.argv)
+    exit(ret_code)
+    
