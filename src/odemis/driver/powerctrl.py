@@ -46,7 +46,8 @@ class PowerControlUnit(model.PowerSupplier):
     communication with the PCU firmware.
     '''
 
-    def __init__(self, name, role, port, pin_map=None, delay=None, init=None, ids=None, **kwargs):
+    def __init__(self, name, role, port, pin_map=None, delay=None, init=None, ids=None,
+                 termination_states=None, **kwargs):
         '''
         port (str): port name
         pin_map (dict of str -> int): names of the components
@@ -56,6 +57,9 @@ class PowerControlUnit(model.PowerSupplier):
         init (dict str -> boolean): turn on/off the corresponding component upon
             initialization.
         ids (list str): EEPROM ids expected to be detected during initialization.
+        termination_states (dict str -> bool/None): indicate for every component
+            if it should be turned off on termination (False), turned on (True)
+            or left as-is (None).
         Raise an exception if the device cannot be opened
         '''
         if pin_map:
@@ -86,6 +90,13 @@ class PowerControlUnit(model.PowerSupplier):
         self._delay = dict.fromkeys(pin_map, 0)
         self._delay.update(delay)
         self._last_start = dict.fromkeys(self._delay, time.time())
+
+        self._termination_states = termination_states or {}
+        for comp, val in list(self._termination_states.items()):
+            if val == "None":  # only keep the components that should be changed
+                del(self._termination_states[comp])
+            if comp not in pin_map:
+                raise ValueError("Component %s in termination_states not found in pin_map." % comp)
 
         # will take care of executing switch asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
@@ -192,6 +203,11 @@ class PowerControlUnit(model.PowerSupplier):
             self._executor.cancel()
             self._executor.shutdown()
             self._executor = None
+
+        # Power components on/off according to ._termination_states
+        # If nothing is specified, leave it as-is.
+        logging.debug("Changing power supply on termination: %s" % self._termination_states)
+        self._doSupply(self._termination_states)
 
         if self._serial:
             with self._ser_access:
