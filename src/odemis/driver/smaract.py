@@ -3092,117 +3092,54 @@ class SA_SIDLL(CDLL):
     Subclass of CDLL specific to SA_SI library, which handles error codes for
     all the functions automatically.
     """
+    SA_SI_TIMEOUT_INFINITE = 0xffffffff
+    SA_SI_STRING_MAX_LENGTH = 63
 
-    hwModel = 0  # specifies the SA_CTL 110.45 S (nano)
-
-    # SmarAct MCS2 error codes
-    SA_CTL_ERROR_NONE = 0x0000
-    SA_CTL_ERROR_UNKNOWN_COMMAND = 0x0001
-    SA_CTL_ERROR_INVALID_PACKET_SIZE = 0x0002
-    SA_CTL_ERROR_TIMEOUT = 0x0004
-    SA_CTL_ERROR_INVALID_PROTOCOL = 0x0005
-    SA_CTL_ERROR_BUFFER_UNDERFLOW = 0x000c
-    SA_CTL_ERROR_BUFFER_OVERFLOW = 0x000d
-    SA_CTL_ERROR_INVALID_PACKET = 0x0010
-    SA_CTL_ERROR_INVALID_STREAM_PACKET = 0x0011
-    SA_CTL_ERROR_INVALID_PROPERTY = 0x0012
-    SA_CTL_ERROR_INVALID_PARAMETER = 0x0013
-    SA_CTL_ERROR_INVALID_CHANNEL_INDEX = 0x0014
-    SA_CTL_ERROR_INVALID_DSOURCE_INDEX = 0x0015
-    SA_CTL_ERROR_INVALID_DATA_TYPE = 0x0016
-    SA_CTL_ERROR_PERMISSION_DENIED = 0x001f
-
-
-    SA_CTL_ERROR_INVALID_DEVICE_INDEX = 0x0020
-    SA_CTL_ERROR_INVALID_MODULE_INDEX = 0x0021
-    SA_CTL_ERROR_INVALID_CHANNEL_INDEX = 0x0022
-
-    SA_CTL_ERROR_PERMISSION_DENIED = 0x0023
-    SA_CTL_ERROR_COMMAND_NOT_GROUPABLE = 0x0024
-    SA_CTL_ERROR_MOVEMENT_LOCKED = 0x0025
-    SA_CTL_ERROR_SYNC_FAILED = 0x0026
-    SA_CTL_ERROR_INVALID_ARRAY_SIZE = 0x0027
-    SA_CTL_ERROR_OVERRANGE = 0x0028
-    SA_CTL_ERROR_INVALID_CONFIGURATION = 0x0029
-
-    SA_CTL_ERROR_NO_HM_PRESENT = 0x0100
-    SA_CTL_ERROR_NO_IOM_PRESENT = 0x0101
-    SA_CTL_ERROR_NO_SM_PRESENT = 0x0102
-    SA_CTL_ERROR_NO_SENSOR_PRESENT = 0x0103
-    SA_CTL_ERROR_SENSOR_DISABLED = 0x0104
-    SA_CTL_ERROR_POWER_SUPPLY_DISABLED = 0x0105
-    SA_CTL_ERROR_AMPLIFIER_DISABLED = 0x0106
-    SA_CTL_ERROR_INVALID_SENSOR_MODE = 0x0107
-    SA_CTL_ERROR_INVALID_ACTUATOR_MODE = 0x0108
-    SA_CTL_ERROR_INVALID_INPUT_TRIG_MODE = 0x0109
-    SA_CTL_ERROR_INVALID_CONTROL_OPTIONS = 0x010a
-    SA_CTL_ERROR_INVALID_REFERENCE_TYPE = 0x010b
-    SA_CTL_ERROR_INVALID_ADJUSTMENT_STATE = 0x010c
-    SA_CTL_ERROR_INVALID_INFO_TYPE = 0x010d
-    SA_CTL_ERROR_NO_FULL_ACCESS = 0x010e
-    SA_CTL_ERROR_ADJUSTMENT_FAILED = 0x010f
-    SA_CTL_ERROR_MOVEMENT_OVERRIDDEN = 0x0110
-    SA_CTL_ERROR_NOT_CALIBRATED = 0x0111
-    SA_CTL_ERROR_NOT_REFERENCED = 0x0112
-    SA_CTL_ERROR_NOT_ADJUSTED = 0x0113
-    SA_CTL_ERROR_SENSOR_TYPE_NOT_SUPPORTED = 0x0114
-    SA_CTL_ERROR_CONTROL_LOOP_INPUT_DISABLED = 0x0115
-    SA_CTL_ERROR_INVALID_CONTROL_LOOP_INPUT = 0x0116
-    SA_CTL_ERROR_UNEXPECTED_SENSOR_DATA = 0x0117
-    SA_CTL_ERROR_NOT_PHASED = 0x0118
-    SA_CTL_ERROR_POSITIONER_FAULT = 0x0119
-    SA_CTL_ERROR_DRIVER_FAULT = 0x011a
-    SA_CTL_ERROR_POSITIONER_TYPE_NOT_SUPPORTED = 0x011b
-    SA_CTL_ERROR_POSITIONER_TYPE_NOT_IDENTIFIED = 0x011c
-    SA_CTL_ERROR_POSITIONER_TYPE_NOT_WRITEABLE = 0x011e
-    SA_CTL_ERROR_INVALID_ACTUATOR_TYPE = 0x0121
-
-    SA_CTL_ERROR_BUSY_MOVING = 0x0150
-    SA_CTL_ERROR_BUSY_CALIBRATING = 0x0151
-    SA_CTL_ERROR_BUSY_REFERENCING = 0x0152
-    SA_CTL_ERROR_BUSY_ADJUSTING = 0x0153
-
-    SA_CTL_ERROR_END_STOP_REACHED = 0x0200
-    SA_CTL_ERROR_FOLLOWING_ERR_LIMIT = 0x0201
-    SA_CTL_ERROR_RANGE_LIMIT_REACHED = 0x0202
-    SA_CTL_ERROR_POSITIONER_OVERLOAD = 0x0203
-    SA_CTL_ERROR_POWER_SUPPLY_FAILURE = 0x0205
-    SA_CTL_ERROR_OVER_TEMPERATURE = 0x0206
-    SA_CTL_ERROR_POWER_SUPPLY_OVERLOAD = 0x0208
-
-    SA_CTL_ERROR_INVALID_STREAM_HANDLE = 0x0300
-    SA_CTL_ERROR_INVALID_STREAM_CONFIGURATION = 0x0301
-    SA_CTL_ERROR_INSUFFICIENT_FRAMES = 0x0302
-    SA_CTL_ERROR_BUSY_STREAMING = 0x0303
-
-    SA_CTL_ERROR_HM_INVALID_SLOT_INDEX = 0x0400
-    SA_CTL_ERROR_HM_INVALID_CHANNEL_INDEX = 0x0401
-    SA_CTL_ERROR_HM_INVALID_GROUP_INDEX = 0x0402
-    SA_CTL_ERROR_HM_INVALID_CH_GRP_INDEX = 0x0403
-
-    SA_CTL_ERROR_INTERNAL_COMMUNICATION = 0x0500
-
-    SA_CTL_ERROR_FEATURE_NOT_SUPPORTED = 0x7ffd
-    SA_CTL_ERROR_FEATURE_NOT_IMPLEMENTED = 0x7ffe
-
-    SA_CTL_ERROR_DEVICE_LIMIT_REACHED = 0xf000
-    SA_CTL_ERROR_INVALID_LOCATOR = 0xf001
-    SA_CTL_ERROR_INITIALIZATION_FAILED = 0xf002
-    SA_CTL_ERROR_NOT_INITIALIZED = 0xf003
-    SA_CTL_ERROR_COMMUNICATION_FAILED = 0xf004
-    SA_CTL_ERROR_INVALID_QUERYBUFFER_SIZE = 0xf006
-    SA_CTL_ERROR_INVALID_DEVICE_HANDLE = 0xf007
-    SA_CTL_ERROR_INVALID_TRANSMIT_HANDLE = 0xf008
-    SA_CTL_ERROR_UNEXPECTED_PACKET_RECEIVED = 0xf00f
-    SA_CTL_ERROR_CANCELED = 0xf010
-    SA_CTL_ERROR_DRIVER_FAILED = 0xf013
-    SA_CTL_ERROR_BUFFER_LIMIT_REACHED = 0xf016
-    SA_CTL_ERROR_INVALID_PROTOCOL_VERSION = 0xf017
-    SA_CTL_ERROR_DEVICE_RESET_FAILED = 0xf018
-    SA_CTL_ERROR_BUFFER_EMPTY = 0xf019
-    SA_CTL_ERROR_DEVICE_NOT_FOUND = 0xf01a
-    SA_CTL_ERROR_THREAD_LIMIT_REACHED = 0xf01b
-    SA_CTL_ERROR_NO_APPLICATION = 0xf01c
+    # SmarAct Picoscale error codes
+    SA_SI_ERROR_NONE = 0x0000
+    SA_SI_ERROR_UNKNOWN_COMMAND = 0x0001
+    SA_SI_ERROR_INVALID_PACKET_SIZE = 0x0002
+    SA_SI_ERROR_TIMEOUT = 0x0004
+    SA_SI_ERROR_INVALID_PROTOCOL = 0x0005
+    SA_SI_ERROR_BUFFER_UNDERFLOW = 0x000c
+    SA_SI_ERROR_BUFFER_OVERFLOW = 0x000d
+    SA_SI_ERROR_INVALID_PACKET = 0x0010
+    SA_SI_ERROR_INVALID_STREAM_PACKET = 0x0011
+    SA_SI_ERROR_INVALID_PROPERTY = 0x0012
+    SA_SI_ERROR_INVALID_PARAMETER = 0x0013
+    SA_SI_ERROR_INVALID_CHANNEL_INDEX = 0x0014
+    SA_SI_ERROR_INVALID_DSOURCE_INDEX = 0x0015
+    SA_SI_ERROR_INVALID_DATA_TYPE = 0x0016
+    SA_SI_ERROR_PERMISSION_DENIED = 0x001f
+    SA_SI_ERROR_NO_DATA_SOURCES_ENABLED = 0x0020
+    SA_SI_ERROR_STREAMING_ACTIVE = 0x0021
+    SA_SI_ERROR_SOURCE_NOT_STREAMABLE = 0x0022
+    SA_SI_ERROR_UNKNOWN_DATA_OBJECT = 0x0030
+    SA_SI_ERROR_COMMAND_NOT_PROCESSABLE = 0x00ff
+    SA_SI_ERROR_FEATURE_NOT_SUPPORTED = 0x7ffd
+    SA_SI_ERROR_NOT_IMPLEMENTED = 0x7ffe
+    SA_SI_ERROR_OTHER = 0x7fff
+    SA_PS_ERROR_REQUEST_DENIED = 0x8000
+    SA_PS_ERROR_INTERNAL_COMMUNICATION = 0x8001
+    SA_PS_ERROR_NO_FULL_ACCESS = 0x8002
+    SA_PS_ERROR_WORKING_DISTANCE_NOT_SET = 0x8200
+    SA_SI_ERROR_DEVICE_LIMIT = 0xf000
+    SA_SI_ERROR_INVALID_LOCATOR = 0xf001
+    SA_SI_ERROR_INITIALIZATION = 0xf002
+    SA_SI_ERROR_NOT_INITIALIZED = 0xf003
+    SA_SI_ERROR_COMMUNICATION = 0xf004
+    SA_SI_ERROR_QUERYBUFFER_SIZE = 0xf006
+    SA_SI_ERROR_INVALID_HANDLE = 0xf007
+    SA_SI_ERROR_DATA_SOURCE_ENABLED = 0xf008
+    SA_SI_ERROR_INVALID_STREAMBUFFER_ID = 0xf009
+    SA_SI_ERROR_STREAM_SEQUENCE = 0xf00a
+    SA_SI_ERROR_NO_DATABUFFER_AVAILABLE = 0xf00b
+    SA_SI_ERROR_NO_STREAMBUFFER_ACQUIRED = 0xf00d
+    SA_SI_ERROR_UNEXPECTED_PACKET_RECEIVED = 0xf00f
+    SA_SI_ERROR_CANCELLED = 0xf010
+    SA_SI_ERROR_BUFFER_INTERLEAVING = 0xf012
+    SA_SI_ERROR_DRIVER = 0xf013
+    SA_SI_ERROR_DATA_OBJECT_BUSY = 0xf014
 
     err_code = {
         0x0000: "NONE",
@@ -3212,77 +3149,26 @@ class SA_SIDLL(CDLL):
         0x0005: "INVALID_PROTOCOL",
         0x000c: "BUFFER_UNDERFLOW",
         0x000d: "BUFFER_OVERFLOW",
-        0x000e: "INVALID_FRAME_SIZE",
         0x0010: "INVALID_PACKET",
-        0x0012: "INVALID_KEY",
+        0x0011: "INVALID_STREAM_PACKET",
+        0x0012: "INVALID_PROPERTY",
         0x0013: "INVALID_PARAMETER",
+        0x0014: "INVALID_CHANNEL_INDEX",
+        0x0015: "INVALID_DSOURCE_INDEX",
         0x0016: "INVALID_DATA_TYPE",
-        0x0017: "INVALID_DATA",
-        0x0018: "HANDLE_LIMIT_REACHED",
-        0x0019: "ABORTED",
-        0x0020: "INVALID_DEVICE_INDEX",
-        0x0021: "INVALID_MODULE_INDEX",
-        0x0022: "INVALID_CHANNEL_INDEX",
-        0x0023: "PERMISSION_DENIED",
-        0x0024: "COMMAND_NOT_GROUPABLE",
-        0x0025: "MOVEMENT_LOCKED",
-        0x0026: "SYNC_FAILED",
-        0x0027: "INVALID_ARRAY_SIZE",
-        0x0028: "OVERRANGE",
-        0x0029: "INVALID_CONFIGURATION",
-        0x0100: "NO_HM_PRESENT",
-        0x0101: "NO_IOM_PRESENT",
-        0x0102: "NO_SM_PRESENT",
-        0x0103: "NO_SENSOR_PRESENT",
-        0x0104: "SENSOR_DISABLED",
-        0x0105: "POWER_SUPPLY_DISABLED",
-        0x0106: "AMPLIFIER_DISABLED",
-        0x0107: "INVALID_SENSOR_MODE",
-        0x0108: "INVALID_ACTUATOR_MODE",
-        0x0109: "INVALID_INPUT_TRIG_MODE",
-        0x010a: "INVALID_CONTROL_OPTIONS",
-        0x010b: "INVALID_REFERENCE_TYPE",
-        0x010c: "INVALID_ADJUSTMENT_STATE",
-        0x010d: "INVALID_INFO_TYPE",
-        0x010e: "NO_FULL_ACCESS",
-        0x010f: "ADJUSTMENT_FAILED",
-        0x0110: "MOVEMENT_OVERRIDDEN",
-        0x0111: "NOT_CALIBRATED",
-        0x0112: "NOT_REFERENCED",
-        0x0113: "NOT_ADJUSTED",
-        0x0114: "SENSOR_TYPE_NOT_SUPPORTED",
-        0x0115: "CONTROL_LOOP_INPUT_DISABLED",
-        0x0116: "INVALID_CONTROL_LOOP_INPUT",
-        0x0117: "UNEXPECTED_SENSOR_DATA",
-        0x0118: "NOT_PHASED",
-        0x0119: "POSITIONER_FAULT",
-        0x011a: "DRIVER_FAULT",
-        0x011b: "POSITIONER_TYPE_NOT_SUPPORTED",
-        0x011c: "POSITIONER_TYPE_NOT_IDENTIFIED",
-        0x011e: "POSITIONER_TYPE_NOT_WRITEABLE",
-        0x0121: "INVALID_ACTUATOR_TYPE",
-        0x0150: "BUSY_MOVING",
-        0x0151: "BUSY_CALIBRATING",
-        0x0152: "BUSY_REFERENCING",
-        0x0153: "BUSY_ADJUSTING",
-        0x0200: "END_STOP_REACHED",
-        0x0201: "FOLLOWING_ERR_LIMIT",
-        0x0202: "RANGE_LIMIT_REACHED",
-        0x0203: "POSITIONER_OVERLOAD",
-        0x0205: "POWER_SUPPLY_FAILURE",
-        0x0206: "OVER_TEMPERATURE",
-        0x0208: "POWER_SUPPLY_OVERLOAD",
-        0x0300: "INVALID_STREAM_HANDLE",
-        0x0301: "INVALID_STREAM_CONFIGURATION",
-        0x0302: "INSUFFICIENT_FRAMES",
-        0x0303: "BUSY_STREAMING",
-        0x0400: "HM_INVALID_SLOT_INDEX",
-        0x0401: "HM_INVALID_CHANNEL_INDEX",
-        0x0402: "HM_INVALID_GROUP_INDEX",
-        0x0403: "HM_INVALID_CH_GRP_INDEX",
-        0x0500: "INTERNAL_COMMUNICATION",
+        0x001f: "PERMISSION_DENIED",
+        0x0020: "NO_DATA_SOURCES_ENABLED",
+        0x0021: "STREAMING_ACTIVE",
+        0x0022: "SOURCE_NOT_STREAMABLE",
+        0x0030: "UNKNOWN_DATA_OBJECT",
+        0x00ff: "COMMAND_NOT_PROCESSABLE",
         0x7ffd: "FEATURE_NOT_SUPPORTED",
-        0x7ffe: "FEATURE_NOT_IMPLEMENTED",
+        0x7ffe: "NOT_IMPLEMENTED",
+        0x7fff: "OTHER_ERROR",
+        0x8000: "REQUEST_DENIED",
+        0x8001: "INTERNAL_COMMUNICATION_ERROR",
+        0x8002: "NO_FULL_ACCESS",
+        0x8200: "WORKING_DISTANCE_NOT_SET",
         0xf000: "DEVICE_LIMIT_REACHED",
         0xf001: "INVALID LOCATOR STRING",
         0xf002: "INITIALIZATION_FAILED",
@@ -3290,247 +3176,175 @@ class SA_SIDLL(CDLL):
         0xf004: "COMMUNICATION FAILED",
         0xf006: "INVALID_QUERYBUFFER_SIZE",
         0xf007: "INVALID DEVICE HANDLE",
-        0xf008: "INVALID TRANSMIT HANDLE",
+        0xf008: "DATA_SOURCE_ENABLED",
+        0xf009: "INVALID_STREAMBUFFER_ID",
+        0xf00a: "STREAM_SEQUENCE_ERROR",
+        0xf00b: "NO_DATABUFFER_AVAILABLE",
+        0xf00d: "NO_STREAMBUFFER_ACQUIRED",
         0xf00f: "UNEXPECTED_PACKET_RECEIVED",
         0xf010: "CANCELLED",
-        0xf013: "DRIVER FAILURE",
-        0xf016: "BUFFER_LIMIT_REACHED",
-        0xf017: "INVALID_PROTOCOL_VERSION",
-        0xf018: "DEVICE_RESET_FAILED",
-        0xf019: "BUFFER_EMPTY",
-        0xf01a: "DEVICE_NOT_FOUND",
-        0xf01b: "THREAD_LIMIT_REACHED",
-        0xf01c: "NO_APPLICATION",
+        0xf012: "BUFFER_INTERLEAVING",
+        0xf013: "DRIVER_ERROR",
+        0xf014: "DATA_OBJECT_BUSY",
     }
 
-    SA_CTL_STRING_MAX_LENGTH = 63
+    # Properties
+    SA_SI_PROTOCOL_VERSION_PROP = 0x0000
+    SA_SI_PROTOCOL_VERSION_STRING_PROP = 0x0001
+    SA_SI_DEVICE_TYPE_PROP = 0x0002
+    SA_SI_DEVICE_ID_PROP = 0x0003
+    SA_SI_DEVICE_SERIAL_NUMBER_PROP = 0x0003
+    SA_SI_DEVICE_NAME_PROP = 0x0004
+    SA_SI_NUMBER_OF_FIRMWARE_VERSIONS_PROP = 0x0005
+    SA_SI_FIRMWARE_VERSION_PROP = 0x0006
+    SA_SI_FIRMWARE_VERSION_STRING_PROP = 0x0007
+    SA_SI_MAX_DATA_OBJECT_CHUNK_SIZE_PROP = 0x0008
+    SA_SI_NUMBER_OF_CHANNELS_PROP = 0x0011
+    SA_SI_MAX_FRAME_RATE_PROP = 0x0020
+    SA_SI_FRAME_RATE_PROP = 0x0021
+    SA_SI_MAX_FRAME_AGGREGATION_PROP = 0x0022
+    SA_SI_FRAME_AGGREGATION_PROP = 0x0023
+    SA_SI_FRAME_INDEX_ENABLED_PROP = 0x0024
+    SA_SI_PRECISE_FRAME_RATE_PROP = 0x0025
+    SA_SI_EVENT_NOTIFICATION_ENABLED_PROP = 0x0030
+    SA_SI_STREAMING_ACTIVE_PROP = 0x0040
+    SA_SI_STREAMING_MODE_PROP = 0x0041
+    SA_SI_NUMBER_OF_DATA_SOURCES_PROP = 0x1001
+    SA_SI_CHANNEL_NAME_PROP = 0x1002
+    SA_SI_DATA_SOURCE_TYPE_PROP = 0x2001
+    SA_SI_DATA_TYPE_PROP = 0x2002
+    SA_SI_AVAILABLE_COMPRESSION_MODES_PROP = 0x2003
+    SA_SI_COMPRESSION_MODE_PROP = 0x2004
+    SA_SI_STREAMING_ENABLED_PROP = 0x2005
+    SA_SI_BASE_UNIT_PROP = 0x2006
+    SA_SI_BASE_RESOLUTION_PROP = 0x2007
+    SA_SI_RESOLUTION_SHIFT_PROP = 0x2008
+    SA_SI_DATA_SOURCE_NAME_PROP = 0x2009
+    SA_SI_IS_STREAMABLE_PROP = 0x200a
+    SA_SI_COMPONENT_ID_PROP = 0x200b
+    SA_SI_COMPONENT_INDEX_PROP = 0x200c
 
-    # device states
-    SA_CTL_DEV_STATE_BIT_HM_PRESENT = 0x00000001
-    SA_CTL_DEV_STATE_BIT_MOVEMENT_LOCKED = 0x00000002
-    SA_CTL_DEV_STATE_BIT_INTERNAL_COMM_FAILURE = 0x00000100
-    SA_CTL_DEV_STATE_BIT_IS_STREAMING = 0x00001000
+    SA_PS_SYS_FULL_ACCESS_CONNECTION_PROP = 0x8000
+    SA_PS_SYS_LVDS_LS_CONNECTED_PROP = 0x8012
+    SA_PS_SYS_PILOT_LASER_ACTIVE_PROP = 0x8020
+    SA_PS_SYS_IS_STABLE_PROP = 0x8030
+    SA_PS_SYS_WORKING_DISTANCE_MIN_PROP = 0x8040
+    SA_PS_SYS_WORKING_DISTANCE_MAX_PROP = 0x8041
+    SA_PS_SYS_WORKING_DISTANCE_ACTIVATE_PROP = 0x8042
+    SA_PS_SYS_WORKING_DISTANCE_SHRINK_MODE_PROP = 0x8043
+    SA_PS_SYS_NETWORK_CURRENT_IP_PROP = 0x8052
+    SA_PS_SYS_NETWORK_CONFIG_ACTIVATE_PROP = 0x8060
+    SA_PS_SYS_NETWORK_CONFIG_DHCP_PROP = 0x8061
+    SA_PS_SYS_NETWORK_CONFIG_IP_PROP = 0x8062
+    SA_PS_SYS_NETWORK_CONFIG_GATEWAY_PROP = 0x8063
+    SA_PS_SYS_NETWORK_CONFIG_NETMASK_PROP = 0x8064
+    SA_PS_SYS_NETWORK_CONFIG_NAMESERVER_PROP = 0x8065
+    SA_PS_SYS_NETWORK_CONFIG_DOMAINNAME_PROP = 0x8066
+    SA_PS_SYS_NETWORK_MAC_PROP = 0x8070
+    SA_PS_SYS_HEAD_TYPE_CATEGORY_COUNT_PROP = 0x8081
+    SA_PS_SYS_HEAD_TYPE_COUNT_PROP = 0x8082
+    SA_PS_SYS_HEAD_TYPE_CATEGORY_NAME_PROP = 0x8083
+    SA_PS_SYS_HEAD_TYPE_NAME_PROP = 0x8084
+    SA_PS_SYS_FIBERLENGTH_HEAD_PROP = 0x8090
+    SA_PS_SYS_FIBERLENGTH_EXTENSION_PROP = 0x8091
+    SA_PS_SYS_POSITION_ALL_CH_PROP = 0x80a0
+    SA_PS_SYS_CONFIGURATION_SAVE_PROP = 0x80c0
+    SA_PS_SYS_CONFIGURATION_LOAD_PROP = 0x80c1
+    SA_PS_SYS_CONFIGURATION_NAME_PROP = 0x80c2
+    SA_PS_SYS_CONFIGURATION_COUNT_PROP = 0x80c3
+    SA_PS_SYS_PRECISION_MODE_PROP = 0x80dd
+    SA_PS_SYS_FILTER_CUTOFF_FREQUENCY_PROP = 0x80de
+    SA_PS_SYS_FILTER_RATE_PROP = 0x80df
+    SA_PS_SYS_BOOTLOADER_VERSION_PROP = 0x80e0
+    SA_PS_SYS_BOOTLOADER_VERSION_STRING_PROP = 0x80e1
+    SA_PS_SYS_HARDWARE_VERSION_PROP = 0x80e2
+    SA_PS_SYS_HARDWARE_VERSION_STRING_PROP = 0x80e3
+    SA_PS_SYS_PRODUCT_VERSION_PROP = 0x80e4
+    SA_PS_SYS_PRODUCT_VERSION_STRING_PROP = 0x80e5
+    SA_PS_SYS_FEATURE_COUNT_PROP = 0x80f0
+    SA_PS_SYS_FEATURE_NAME_PROP = 0x80f1
+    SA_PS_SYS_FEATURE_TIME_PROP = 0x80f2
+    SA_PS_SYS_FEATURE_EVALUATE_PROP = 0x80f3
+    SA_PS_CH_ENABLED_PROP = 0x8100
+    SA_PS_CH_IS_VALID_PROP = 0x8101
+    SA_PS_CH_POSITION_PROP = 0x8102
+    SA_PS_CH_SCALE_INVERSION_PROP = 0x8103
+    SA_PS_CH_DEAD_PATH_CORRECTION_ENABLED_PROP = 0x8110
+    SA_PS_CH_DEAD_PATH_PROP = 0x8111
+    SA_PS_CH_HEAD_TYPE_PROP = 0x8112
+    SA_PS_CH_BEAM_INTERRUPT_TOLERANCE_PROP = 0x8113
+    SA_PS_CH_SIGNAL_CORRECTION_ENABLED_PROP = 0x8114
+    SA_PS_CH_POS_CALC_ENABLED_PROP = 0x8115
+    SA_PS_CH_POS_CALC_MODE_PROP = 0x8116
+    SA_PS_CH_POS_CALC_TRIGGER_CONDITION_PROP = 0x8117
+    SA_PS_CH_POS_CALC_TRIGGER_INDEX_PROP = 0x8118
+    SA_PS_CH_POS_CALC_TRIGGER_AUTO_RESET_MODE_PROP = 0x8119
+    SA_PS_CH_POS_CALC_STATE_PROP = 0x811a
+    SA_PS_CH_DEAD_PATH_CORRECTION_SOURCE_PROP = 0x811b
+    SA_PS_CH_DEAD_PATH_CORRECTION_USER_VALUE_PROP = 0x811c
+    SA_PS_CH_DEAD_PATH_CORRECTION_MODE_PROP = 0x811d
 
-    # module states
-    SA_CTL_MOD_STATE_BIT_SM_PRESENT = 0x00000001
-    SA_CTL_MOD_STATE_BIT_BOOSTER_PRESENT = 0x00000002
-    SA_CTL_MOD_STATE_BIT_ADJUSTMENT_ACTIVE = 0x00000004
-    SA_CTL_MOD_STATE_BIT_IOM_PRESENT = 0x00000008
-    SA_CTL_MOD_STATE_BIT_INTERNAL_COMM_FAILURE = 0x00000100
-    SA_CTL_MOD_STATE_BIT_FAN_FAILURE = 0x00000800
-    SA_CTL_MOD_STATE_BIT_POWER_SUPPLY_FAILURE = 0x00001000
-    SA_CTL_MOD_STATE_BIT_HIGH_VOLTAGE_FAILURE = 0x00001000  # deprecated
-    SA_CTL_MOD_STATE_BIT_POWER_SUPPLY_OVERLOAD = 0x00002000
-    SA_CTL_MOD_STATE_BIT_HIGH_VOLTAGE_OVERLOAD = 0x00002000  # deprecated
-    SA_CTL_MOD_STATE_BIT_OVER_TEMPERATURE = 0x00004000
+    SA_PS_AF_ADJUSTMENT_STATE_PROP = 0x9010
+    SA_PS_AF_ADJUSTMENT_PROGRESS_PROP = 0x9011
+    SA_PS_AF_ADJUSTMENT_SIGNAL_CONTROL_ACTIVE_PROP = 0x9012
+    SA_PS_AF_ADJUSTMENT_AUTOSTART_AUTOADJUST_ACTIVE_PROP = 0x9013
+    SA_PS_AF_ADJUSTMENT_RESULT_SAVE_PROP = 0x901a
+    SA_PS_AF_ADJUSTMENT_RESULT_LOAD_PROP = 0x901b
+    SA_PS_AF_ADJUSTMENT_RESULT_NAME_PROP = 0x901c
+    SA_PS_AF_ADJUSTMENT_RESULT_COUNT_PROP = 0x901d
+    SA_PS_AF_CHANNEL_VALIDATION_STATE_PROP = 0x9040
 
-    # channel states
-    SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING = 0x00000001
-    SA_CTL_CH_STATE_BIT_CLOSED_LOOP_ACTIVE = 0x00000002
-    SA_CTL_CH_STATE_BIT_CALIBRATING = 0x00000004
-    SA_CTL_CH_STATE_BIT_REFERENCING = 0x00000008
-    SA_CTL_CH_STATE_BIT_MOVE_DELAYED = 0x00000010
-    SA_CTL_CH_STATE_BIT_SENSOR_PRESENT = 0x00000020
-    SA_CTL_CH_STATE_BIT_IS_CALIBRATED = 0x00000040
-    SA_CTL_CH_STATE_BIT_IS_REFERENCED = 0x00000080
-    SA_CTL_CH_STATE_BIT_END_STOP_REACHED = 0x00000100
-    SA_CTL_CH_STATE_BIT_RANGE_LIMIT_REACHED = 0x00000200
-    SA_CTL_CH_STATE_BIT_FOLLOWING_LIMIT_REACHED = 0x00000400
-    SA_CTL_CH_STATE_BIT_MOVEMENT_FAILED = 0x00000800
-    SA_CTL_CH_STATE_BIT_IS_STREAMING = 0x00001000
-    SA_CTL_CH_STATE_BIT_POSITIONER_OVERLOAD = 0x00002000
-    SA_CTL_CH_STATE_BIT_OVER_TEMPERATURE = 0x00004000
-    SA_CTL_CH_STATE_BIT_REFERENCE_MARK = 0x00008000
-    SA_CTL_CH_STATE_BIT_IS_PHASED = 0x00010000
-    SA_CTL_CH_STATE_BIT_POSITIONER_FAULT = 0x00020000
-    SA_CTL_CH_STATE_BIT_AMPLIFIER_ENABLED = 0x00040000
+    # States
+    SA_SI_DISABLED = 0x00
+    SA_SI_ENABLED = 0x01
 
-    # hand control module states
-    SA_CTL_HM_STATE_BIT_INTERNAL_COMM_FAILURE = 0x0100
-    SA_CTL_HM_STATE_BIT_IS_INTERNAL = 0x0200
+    SA_PS_ADJUSTMENT_STATE_DISABLED = 0x00
+    SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST = 0x01
+    SA_PS_ADJUSTMENT_STATE_AUTO_ADJUST = 0x02
+    SA_PS_CHANNEL_VALIDATION_STATE_DISABLED = 0x00
+    SA_PS_CHANNEL_VALIDATION_STATE_ENABLED = 0x01
+    SA_PS_WORKING_DISTANCE_SHRINK_MODE_LEFT_RIGHT = 0x00
+    SA_PS_WORKING_DISTANCE_SHRINK_MODE_LEFT = 0x01
+    SA_PS_WORKING_DISTANCE_SHRINK_MODE_RIGHT = 0x02
 
-    # property keys
-    SA_CTL_PKEY_NUMBER_OF_CHANNELS = 0x020F0017
-    SA_CTL_PKEY_NUMBER_OF_BUS_MODULES = 0x020F0016
-    SA_CTL_PKEY_INTERFACE_TYPE = 0x020F0066
-    SA_CTL_PKEY_DEVICE_STATE = 0x020F000F
-    SA_CTL_PKEY_DEVICE_SERIAL_NUMBER = 0x020F005E
-    SA_CTL_PKEY_DEVICE_NAME = 0x020F003D
-    SA_CTL_PKEY_EMERGENCY_STOP_MODE = 0x020F0088
-    SA_CTL_PKEY_NETWORK_DISCOVER_MODE = 0x020F0159
-    SA_CTL_PKEY_NETWORK_DHCP_TIMEOUT = 0x020F015C
-    # module
-    SA_CTL_PKEY_POWER_SUPPLY_ENABLED = 0x02030010
-    SA_CTL_PKEY_NUMBER_OF_BUS_MODULE_CHANNELS = 0x02030017
-    SA_CTL_PKEY_MODULE_TYPE = 0x02030066
-    SA_CTL_PKEY_MODULE_STATE = 0x0203000F
-    # positioner
-    SA_CTL_PKEY_STARTUP_OPTIONS = 0x0A02005D
-    SA_CTL_PKEY_AMPLIFIER_ENABLED = 0x0302000D
-    SA_CTL_PKEY_AMPLIFIER_MODE = 0x030200BF
-    SA_CTL_PKEY_POSITIONER_CONTROL_OPTIONS = 0x0302005D
-    SA_CTL_PKEY_ACTUATOR_MODE = 0x03020019
-    SA_CTL_PKEY_CONTROL_LOOP_INPUT = 0x03020018
-    SA_CTL_PKEY_SENSOR_INPUT_SELECT = 0x0302009D
-    SA_CTL_PKEY_POSITIONER_TYPE = 0x0302003C
-    SA_CTL_PKEY_POSITIONER_TYPE_NAME = 0x0302003D
-    SA_CTL_PKEY_MOVE_MODE = 0x03050087
-    SA_CTL_PKEY_CHANNEL_TYPE = 0x02020066
-    SA_CTL_PKEY_CHANNEL_STATE = 0x0305000F
-    SA_CTL_PKEY_POSITION = 0x0305001D
-    SA_CTL_PKEY_TARGET_POSITION = 0x0305001E
-    SA_CTL_PKEY_SCAN_POSITION = 0x0305001F
-    SA_CTL_PKEY_SCAN_VELOCITY = 0x0305002A
-    SA_CTL_PKEY_HOLD_TIME = 0x03050028
-    SA_CTL_PKEY_MOVE_VELOCITY = 0x03050029
-    SA_CTL_PKEY_MOVE_ACCELERATION = 0x0305002B
-    SA_CTL_PKEY_MAX_CL_FREQUENCY = 0x0305002F
-    SA_CTL_PKEY_DEFAULT_MAX_CL_FREQUENCY = 0x03050057
-    SA_CTL_PKEY_STEP_FREQUENCY = 0x0305002E
-    SA_CTL_PKEY_STEP_AMPLITUDE = 0x03050030
-    SA_CTL_PKEY_FOLLOWING_ERROR_LIMIT = 0x03050055
-    SA_CTL_PKEY_FOLLOWING_ERROR = 0x03020055
-    SA_CTL_PKEY_BROADCAST_STOP_OPTIONS = 0x0305005D
-    SA_CTL_PKEY_SENSOR_POWER_MODE = 0x03080019
-    SA_CTL_PKEY_SENSOR_POWER_SAVE_DELAY = 0x03080054
-    SA_CTL_PKEY_POSITION_MEAN_SHIFT = 0x03090022
-    SA_CTL_PKEY_SAFE_DIRECTION = 0x03090027
-    SA_CTL_PKEY_CL_INPUT_SENSOR_VALUE = 0x0302001D
-    SA_CTL_PKEY_CL_INPUT_AUX_VALUE = 0x030200B2
-    SA_CTL_PKEY_TARGET_TO_ZERO_VOLTAGE_HOLD_TH = 0x030200B9
-    # scale
-    SA_CTL_PKEY_LOGICAL_SCALE_OFFSET = 0x02040024
-    SA_CTL_PKEY_LOGICAL_SCALE_INVERSION = 0x02040025
-    SA_CTL_PKEY_RANGE_LIMIT_MIN = 0x02040020
-    SA_CTL_PKEY_RANGE_LIMIT_MAX = 0x02040021
-    SA_CTL_PKEY_DEFAULT_RANGE_LIMIT_MIN = 0x020400C0
-    SA_CTL_PKEY_DEFAULT_RANGE_LIMIT_MAX = 0x020400C1
-    # calibration
-    SA_CTL_PKEY_CALIBRATION_OPTIONS = 0x0306005D
-    SA_CTL_PKEY_SIGNAL_CORRECTION_OPTIONS = 0x0306001C
-    # referencing
-    SA_CTL_PKEY_REFERENCING_OPTIONS = 0x0307005D
-    SA_CTL_PKEY_DIST_CODE_INVERTED = 0x0307000E
-    SA_CTL_PKEY_DISTANCE_TO_REF_MARK = 0x030700A2
-    # tuning and customizing
-    SA_CTL_PKEY_POS_MOVEMENT_TYPE = 0x0309003F
-    SA_CTL_PKEY_POS_IS_CUSTOM_TYPE = 0x03090041
-    SA_CTL_PKEY_POS_BASE_UNIT = 0x03090042
-    SA_CTL_PKEY_POS_BASE_RESOLUTION = 0x03090043
-    SA_CTL_PKEY_POS_HEAD_TYPE = 0x0309008E
-    SA_CTL_PKEY_POS_REF_TYPE = 0x03090048
-    SA_CTL_PKEY_POS_P_GAIN = 0x0309004B
-    SA_CTL_PKEY_POS_I_GAIN = 0x0309004C
-    SA_CTL_PKEY_POS_D_GAIN = 0x0309004D
-    SA_CTL_PKEY_POS_PID_SHIFT = 0x0309004E
-    SA_CTL_PKEY_POS_ANTI_WINDUP = 0x0309004F
-    SA_CTL_PKEY_POS_ESD_DIST_TH = 0x03090050
-    SA_CTL_PKEY_POS_ESD_COUNTER_TH = 0x03090051
-    SA_CTL_PKEY_POS_TARGET_REACHED_TH = 0x03090052
-    SA_CTL_PKEY_POS_TARGET_HOLD_TH = 0x03090053
-    SA_CTL_PKEY_POS_SAVE = 0x0309000A
-    SA_CTL_PKEY_POS_WRITE_PROTECTION = 0x0309000D
-    # streaming
-    SA_CTL_PKEY_STREAM_BASE_RATE = 0x040F002C
-    SA_CTL_PKEY_STREAM_EXT_SYNC_RATE = 0x040F002D
-    SA_CTL_PKEY_STREAM_OPTIONS = 0x040F005D
-    SA_CTL_PKEY_STREAM_LOAD_MAX = 0x040F0301
-    # diagnostic
-    SA_CTL_PKEY_CHANNEL_ERROR = 0x0502007A
-    SA_CTL_PKEY_CHANNEL_TEMPERATURE = 0x05020034
-    SA_CTL_PKEY_BUS_MODULE_TEMPERATURE = 0x05030034
-    SA_CTL_PKEY_POSITIONER_FAULT_REASON = 0x05020113
-    SA_CTL_PKEY_MOTOR_LOAD = 0x05020115
-    # io module
-    SA_CTL_PKEY_IO_MODULE_OPTIONS = 0x0603005D
-    SA_CTL_PKEY_IO_MODULE_VOLTAGE = 0x06030031
-    SA_CTL_PKEY_IO_MODULE_ANALOG_INPUT_RANGE = 0x060300A0
-    # auxiliary
-    SA_CTL_PKEY_AUX_POSITIONER_TYPE = 0x0802003C
-    SA_CTL_PKEY_AUX_POSITIONER_TYPE_NAME = 0x0802003D
-    SA_CTL_PKEY_AUX_INPUT_SELECT = 0x08020018
-    SA_CTL_PKEY_AUX_IO_MODULE_INPUT_INDEX = 0x081100AA
-    SA_CTL_PKEY_AUX_SENSOR_MODULE_INPUT_INDEX = 0x080B00AA
-    SA_CTL_PKEY_AUX_IO_MODULE_INPUT0_VALUE = 0x08110000
-    SA_CTL_PKEY_AUX_IO_MODULE_INPUT1_VALUE = 0x08110001
-    SA_CTL_PKEY_AUX_SENSOR_MODULE_INPUT0_VALUE = 0x080B0000
-    SA_CTL_PKEY_AUX_SENSOR_MODULE_INPUT1_VALUE = 0x080B0001
-    SA_CTL_PKEY_AUX_DIRECTION_INVERSION = 0x0809000E
-    SA_CTL_PKEY_AUX_DIGITAL_INPUT_VALUE = 0x080300AD
-    SA_CTL_PKEY_AUX_DIGITAL_OUTPUT_VALUE = 0x080300AE
-    SA_CTL_PKEY_AUX_DIGITAL_OUTPUT_SET = 0x080300B0
-    SA_CTL_PKEY_AUX_DIGITAL_OUTPUT_CLEAR = 0x080300B1
-    SA_CTL_PKEY_AUX_ANALOG_OUTPUT_VALUE0 = 0x08030000
-    SA_CTL_PKEY_AUX_ANALOG_OUTPUT_VALUE1 = 0x08030001
-    # threshold detector
-    SA_CTL_PKEY_THD_INPUT_SELECT = 0x09020018
-    SA_CTL_PKEY_THD_IO_MODULE_INPUT_INDEX = 0x091100AA
-    SA_CTL_PKEY_THD_SENSOR_MODULE_INPUT_INDEX = 0x090B00AA
-    SA_CTL_PKEY_THD_THRESHOLD_HIGH = 0x090200B4
-    SA_CTL_PKEY_THD_THRESHOLD_LOW = 0x090200B5
-    SA_CTL_PKEY_THD_INVERSION = 0x0902000E
-    # input trigger
-    SA_CTL_PKEY_DEV_INPUT_TRIG_MODE = 0x060D0087
-    SA_CTL_PKEY_DEV_INPUT_TRIG_CONDITION = 0x060D005A
-    # output trigger
-    SA_CTL_PKEY_CH_OUTPUT_TRIG_MODE = 0x060E0087
-    SA_CTL_PKEY_CH_OUTPUT_TRIG_POLARITY = 0x060E005B
-    SA_CTL_PKEY_CH_OUTPUT_TRIG_PULSE_WIDTH = 0x060E005C
-    SA_CTL_PKEY_CH_POS_COMP_START_THRESHOLD = 0x060E0058
-    SA_CTL_PKEY_CH_POS_COMP_INCREMENT = 0x060E0059
-    SA_CTL_PKEY_CH_POS_COMP_DIRECTION = 0x060E0026
-    SA_CTL_PKEY_CH_POS_COMP_LIMIT_MIN = 0x060E0020
-    SA_CTL_PKEY_CH_POS_COMP_LIMIT_MAX = 0x060E0021
-    # hand control module
-    SA_CTL_PKEY_HM_STATE = 0x020C000F
-    SA_CTL_PKEY_HM_LOCK_OPTIONS = 0x020C0083
-    SA_CTL_PKEY_HM_DEFAULT_LOCK_OPTIONS = 0x020C0084
-    # api
-    SA_CTL_PKEY_API_EVENT_NOTIFICATION_OPTIONS = 0xF010005D
-    SA_CTL_PKEY_EVENT_NOTIFICATION_OPTIONS = 0xF010005D  # deprecated
-    SA_CTL_PKEY_API_AUTO_RECONNECT = 0xF01000A1
-    SA_CTL_PKEY_AUTO_RECONNECT = 0xF01000A1  # deprecated
-
-    # move modes
-    SA_CTL_MOVE_MODE_CL_ABSOLUTE = 0
-    SA_CTL_MOVE_MODE_CL_RELATIVE = 1
-    SA_CTL_MOVE_MODE_SCAN_ABSOLUTE = 2
-    SA_CTL_MOVE_MODE_SCAN_RELATIVE = 3
-    SA_CTL_MOVE_MODE_STEP = 4
-
-    # referencing options
-    SA_CTL_REF_OPT_BIT_NORMAL = 0x00000000
-    SA_CTL_REF_OPT_BIT_START_DIR = 0x00000001
-    SA_CTL_REF_OPT_BIT_REVERSE_DIR = 0x00000002
-    SA_CTL_REF_OPT_BIT_AUTO_ZERO = 0x00000004
-    SA_CTL_REF_OPT_BIT_ABORT_ON_ENDSTOP = 0x00000008
-    SA_CTL_REF_OPT_BIT_CONTINUE_ON_REF_FOUND = 0x00000010
-    SA_CTL_REF_OPT_BIT_STOP_ON_REF_FOUND = 0x00000020
-
-    # calibration options
-    SA_CTL_CALIB_OPT_BIT_DIRECTION = 0x00000001
-    SA_CTL_CALIB_OPT_BIT_DIST_CODE_INV_DETECT = 0x00000002
-    SA_CTL_CALIB_OPT_BIT_ASC_CALIBRATION = 0x00000004
-    SA_CTL_CALIB_OPT_BIT_REF_MARK_TEST = 0x00000008
-    SA_CTL_CALIB_OPT_BIT_LIMITED_TRAVEL_RANGE = 0x00000100
-
-    SA_CTL_INFINITE = 0xffffffff
+    # Events
+    SA_PS_FULL_ACCESS_CONNECTION_LOST_EVENT = 0x8000
+    SA_PS_BEAM_INTERRUPT_EVENT = 0x8010
+    SA_PS_OVERRANGE_EVENT = 0x8011
+    SA_PS_OVERHEAT_EVENT = 0x8012
+    SA_PS_CALC_SYS_DATA_INTERRUPT_EVENT = 0x8013
+    SA_PS_STABLE_STATE_CHANGED_EVENT = 0x8100
+    SA_PS_CHANNEL_ENABLED_STATE_CHANGED_EVENT = 0x8101
+    SA_PS_CHANNEL_VALID_STATE_CHANGED_EVENT = 0x8102
+    SA_PS_PILOT_LASER_STATE_CHANGED_EVENT = 0x8103
+    SA_PS_ENV_SENSOR_STATE_CHANGED_EVENT = 0x8104
+    SA_PS_COUNTER_STATE_CHANGED_EVENT = 0x8105
+    SA_PS_CLOCK_GEN_STATE_CHANGED_EVENT = 0x8106
+    SA_PS_SIG_GEN_STATE_CHANGED_EVENT = 0x8107
+    SA_PS_BOB_CONNECT_STATE_CHANGED_EVENT = 0x8108
+    SA_PS_LVDS_LS_CONNECT_STATE_CHANGED_EVENT = 0x8109
+    SA_PS_ENV_DEVICE_STATE_CHANGED_EVENT = 0x810A
+    SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT = 0x8a80
+    SA_PS_FILTER_SETTING_CHANGED_EVENT = 0x8a82
+    SA_PS_AF_CHANNEL_VALIDATION_PROGRESS_EVENT = 0x8a83
 
     def __init__(self):
         if os.name == "nt":
             raise NotImplemented("Windows not yet supported")
-            # WinDLL.__init__(self, "libSA_CTL.dll")  # TODO check it works
+            # WinDLL.__init__(self, "libSA_si.dll")  # TODO check it works
             # atmcd64d.dll on 64 bits
         else:
             # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libsmaractctl.so", RTLD_GLOBAL)
+            CDLL.__init__(self, "libsmaractsi.so", RTLD_GLOBAL)
 
-        self.SA_CTL_GetFullVersionString.restype = c_char_p
-        self.SA_CTL_GetFullVersionString.errcheck = lambda r, f, a: r  # Always happy
+        self.SA_SI_GetFullVersionString.restype = c_char_p
+        self.SA_SI_GetFullVersionString.errcheck = lambda r, f, a: r  # Always happy
+        self.SA_SI_EPK.restype = c_uint32
+        self.SA_SI_EPK.errcheck = lambda r, f, a: r  # Always happy
 
     def __getitem__(self, name):
         try:
-            func = super(SA_CTLDLL, self).__getitem__(name)
+            func = super(SA_SIDLL, self).__getitem__(name)
         except Exception:
             raise AttributeError("Failed to find %s" % (name,))
         func.__name__ = name
@@ -3545,9 +3359,9 @@ class SA_SIDLL(CDLL):
         error.
         Follows the ctypes.errcheck callback convention
         """
-        if result != SA_CTLDLL.SA_CTL_ERROR_NONE:
-            raise SA_CTLError(result, "Call to %s() failed with error 0x%x: %s" %
-                              (func.__name__, result, SA_CTLDLL.err_code.get(result, "")))
+        if result != SA_SIDLL.SA_SI_ERROR_NONE:
+            raise SA_SIError(result, "Call to %s() failed with error 0x%x: %s" %
+                              (func.__name__, result, SA_SIDLL.err_code.get(result, "")))
 
         return result
 
@@ -3560,26 +3374,65 @@ class SA_SIError(IOError):
         return self.strerror
 
 
+class SA_SI_Event(Structure):
+    """
+    SA_SI Event structure (C struct used by DLL)
+    """
+    _fields_ = [
+        ("error", c_uint32),
+        ("bufferId", c_uint32),
+        ("devEventParameter", c_int32),
+        ("unused", c_int8 * 24),
+        ]
+
+class SA_SI_EventData(Union):
+    """
+    SA_MC event data is stored as this type of union (A C union used by DLL)
+    """
+    _fields_ = [
+        ("error", c_uint32),
+        ("bufferId", c_uint32),
+        ("devEventParameter", c_int32),
+        ("unused", c_int8 * 24),
+         ]
+
+
+class SA_SI_Event(Structure):
+    """
+    SA_MC Event structure (C struct used by DLL)
+    """
+    _anonymous_ = ("u",)
+    _fields_ = [
+        ("type", c_uint32),
+        #("unused", c_int8 * 28),
+        ("u", SA_SI_EventData),
+        ]
+
 class Picoscale(model.HwComponent):
 
     def __init__(self, name, role, locator, channels, ref_on_init, precision_level, *args, **kwargs):
         """
-        A driver for a SmarAct MCS2 Actuator.
-        This driver uses a DLL provided by SmarAct which connects via
-        USB or TCP/IP using a locator string.
+        A driver for a SmarAct Picoscale interferometer system.
+        This driver uses a DLL provided by SmarAct which connects via USB or TCP/IP using a locator string.
 
         name: (str)
         role: (str)
         locator: (str) Use "fake" for a simulator.
-            For a real device, MCS controllers with USB interface can be addressed with the
+            For a real device, Picoscale controllers with USB interface can be addressed with the
             following locator syntax:
-                usb:id:<id>
+                usb:ix:<id>
             where <id> is the first part of a USB devices serial number which
             is printed on the MCS controller.
             If the controller has a TCP/IP connection, use:
                 network:<ip>:<port>
+            The device can also be addressed by its serial number:
+                usb:sn:<serial_number>
+                network:sn:<serial_number>
+        channels: (str --> int) dictionary mapping channel names to channel numbers
         ref_on_init: (bool) determines if the controller should automatically reference
             on initialization
+        precision_level: (0 <= int <= 5) strength of digital lowpass filter, a higher level corresponds to higher
+            precision, but lower velocity.
         """
         if not channels:
             raise ValueError("Needs at least 1 axis.")
@@ -3589,35 +3442,46 @@ class Picoscale(model.HwComponent):
         else:
             self.core = SA_SIDLL()
 
-        # Not to be mistaken with axes which is a simple public view
-        self._axis_map = {}  # axis name -> axis number used by controller
+        self.channels = channels  # channel name -> channel number used by controller
         self._locator = locator
 
         # Connect to the device
-        logging.debug("Connecting to locator %s", locator)
+        logging.debug("Connecting to locator %s.", locator)
         self._id = c_uint32(0)
         try:
-            self.core.SA_CTL_Open(byref(self._id), c_char_p(locator.encode("ascii")), c_char_p(b""))
-        except SA_CTLError as ex:
-            if ex.errno == SA_CTLDLL.SA_CTL_ERROR_DEVICE_NOT_FOUND:
-                raise model.HwError("Failed to find device, check it is connected and turned on")
+            self.core.SA_SI_Open(byref(self._id), c_char_p(locator.encode("ascii")), c_char_p(b""))
+        except SA_SIError as ex:
+            if ex.errno == SA_SIDLL.SA_SI_ERROR_INITIALIZATION:
+                raise model.HwError("Failed to find device, check it is connected and turned on.")
             raise
-        logging.debug("Connected to SA_CTL Controller ID %d with %d channels", self._id.value, self._get_number_of_channels())
-        model.HwComponent.__init__(self, name, role, **kwargs)
+        logging.debug("Connected to SA_SI Controller ID %d with %d channels",
+                      self._id.value, self._get_number_of_channels())
+        model.HwComponent.__init__(self, name, role, *args, **kwargs)
 
-        # Add metadata
+        # Version
         self._swVersion = self.GetFullVersionString()
-        devname = self.GetProperty_s(SA_SIDLL.SA_SI_PKEY_DEVICE_NAME)
-        sn = self.GetProperty_s(SA_SIDLL.SA_SI_PKEY_DEVICE_SERIAL_NUMBER)
-        self._hwVersion = "SmarAct Picoscale %s (s/n %s) with positioners %s" % (devname, sn,)
+        devname = self.GetProperty_s(SA_SIDLL.SA_SI_DEVICE_NAME_PROP)
+        sn = self.GetProperty_s(SA_SIDLL.SA_SI_DEVICE_SERIAL_NUMBER_PROP)
+        self._hwVersion = "SmarAct Picoscale %s (s/n %s)" % (devname, sn,)
+        logging.debug("Using SA_SI library version %s to connect to %s. ", self._swVersion, self._hwVersion)
 
-        logging.debug("Using SA_CTL library version %s to connect to %s", self._swVersion, self._hwVersion)
+        self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
         self.position = model.VigilantAttribute({}, readonly=True)
         self._updatePosition()
 
+        # Get full access (e.g. for adjustment procedure, loading properties, etc.)
+        self.SetProperty_i32(SA_SIDLL.SA_PS_SYS_FULL_ACCESS_CONNECTION_PROP, SA_SIDLL.SA_SI_ENABLED)
+
+        # Restore previous configuration (working distance etc, usually set during installation)
+        self.LoadConfiguration()
+
+        # Enable channels
+        for ch in self.channels.values():
+            self.EnableChannel(ch)
+
         # define the referenced VA from the query
-        axes_ref = {a: self._is_channel_referenced(i) for a, i in self._axis_map.items()}
+        axes_ref = {a: self._is_channel_referenced(i) for a, i in self.channels.items()}
         # VA dict str(axis) -> bool
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
 
@@ -3628,7 +3492,7 @@ class Picoscale(model.HwComponent):
             if ref_on_init:
                 self.reference().result()
             else:
-                logging.warning("SA_CTL is not referenced. The device will not function until referencing occurs.")
+                logging.warning("SA_SI is not referenced. The device will not function until referencing occurs.")
 
         # Start thread for position update
         self._pos_poll = util.RepeatingTimer(1, self._updatePosition, "Position polling")
@@ -3642,90 +3506,186 @@ class Picoscale(model.HwComponent):
     @staticmethod
     def scan():
         """
-        Util function to find all of the MCS2 controllers
-        returns: set of tuples (name, dict) with dict str -> str
-            the dict just has the locator string
+        Util function to find all of the Picoscale controllers
+        returns: set of locator strings
         """
         core = SA_SIDLL()
         b_len = 1024
         buf = create_string_buffer(b_len)
-        core.SA_CTL_FindDevices(c_char_p(b""), buf, byref(c_size_t(b_len)))
-        locators = buf.value.encode('ascii')
+        core.SA_SI_EnumerateDevices(c_char_p(b""), buf, byref(c_size_t(b_len)))
+        locators = buf.value.decode('latin1').split("\n")
+        return set(locators)  # sometimes the same locator is returned multiple times, convert to set for unique values
 
-        devices = set()
-        for counter, loc in enumerate(locators):
-            devices.add(("Picoscale %d" % (counter,), {"locator": loc}))
+    def _get_number_of_channels(self):
+        # TODO
+        return 3
 
-        return devices
+    def _is_channel_referenced(self, ch):
+        # TODO
+        return False
 
-    # API Calls
-    def Reference(self, channel):
-        # Calibrate the controller. Note - this is blocking
-        self.core.SA_CTL_Calibrate(self._id, c_int8(channel), c_int8(0))
-        while self._is_channel_moving(channel):
-            time.sleep(0.1)
+    def _is_referenced(self):
+        """
+        Ask the controller if it is referenced
+        """
+        # TODO
+        return True
 
     def GetFullVersionString(self):
         ver = self.core.SA_SI_GetFullVersionString()
         return ver.decode("latin1")
 
+    def LoadConfiguration(self):
+        """
+        Load the configuration of the device. Usually, the configuration parameters are set during installation.
+        This function is blocking.
+        """
+        self.SetProperty_i32(SA_SIDLL.SA_PS_AF_ADJUSTMENT_RESULT_LOAD_PROP, SA_SIDLL.SA_SI_ENABLED)
+        self.WaitForEvent(SA_SIDLL.SA_PS_STABLE_STATE_CHANGED_EVENT, 1)
+
+        # Validate channels
+        # After loading the settings, a quick adjustment routine needs to be performed (channel validation).
+        self.SetProperty_i32(SA_SIDLL.SA_PS_AF_CHANNEL_VALIDATION_STATE_PROP, SA_SIDLL.SA_SI_ENABLED)
+        self.WaitForEvent(SA_SIDLL.SA_PS_AF_CHANNEL_VALIDATION_PROGRESS_EVENT, 1)
+
+    def EnableChannel(self, channel):
+        """
+        Enable channel. This function is blocking.
+        channel (int): channel number
+        """
+        self.SetProperty_i32(self.core.SA_PS_CH_ENABLED_PROP, self.core.SA_SI_ENABLED, idx0=channel)
+        while self.GetProperty_i32(self.core.SA_PS_CH_ENABLED_PROP, idx0=channel) != SA_SIDLL.SA_PS_CHANNEL_VALIDATION_STATE_ENABLED:
+            time.sleep(0.1)
+
     # Functions to set the property values in the controller, categorized by data type
-    def SetProperty_f64(self, property_key, value):
+    def SetProperty_f64(self, property_key, value, idx0=0, idx1=0):
         """
         property_key (int32): property key symbol
         value (double): value to set
+        idx0 (int): index value, meaning depends on property key
+        idx1 (int): index value, meaning depends on property key
         """
-        self.core.SA_SI_SetProperty_f64(self._id, c_uint32(property_key), c_double(value))
+        encoded_key = self.core.SA_SI_EPK(property_key, idx0, idx1)
+        self.core.SA_SI_SetProperty_f64(self._id, c_uint32(encoded_key), c_double(value))
 
-    def SetProperty_i32(self, property_key, value):
+    def SetProperty_i32(self, property_key, value, idx0=0, idx1=0):
         """
         property_key (int32): property key symbol
         value (int32): value to set
+        idx0 (int): index value, meaning depends on property key
+        idx1 (int): index value, meaning depends on property key
         """
-        self.core.SA_SI_SetProperty_i32(self._id, c_uint32(property_key), c_int32(value))
+        encoded_key = self.core.SA_SI_EPK(property_key, idx0, idx1)
+        self.core.SA_SI_SetProperty_i32(self._id, c_uint32(encoded_key), value)
 
-    def SetProperty_i64(self, property_key, value):
+    def SetProperty_i64(self, property_key, value, idx0=0, idx1=0):
         """
         property_key (int64): property key symbol
         value (int64): value to set
+        idx0 (int): index value, meaning depends on property key
+        idx1 (int): index value, meaning depends on property key
         """
-        self.core.SA_SI_SetProperty_i64(self._id, c_uint32(property_key), c_int64(value))
+        encoded_key = self.core.SA_SI_EPK(property_key, idx0, idx1)
+        self.core.SA_SI_SetProperty_i64(self._id, c_uint32(encoded_key), c_int64(value))
 
-    def GetProperty_f64(self, property_key):
+    def GetProperty_f64(self, property_key, idx0=0, idx1=0):
         """
         property_key (int32): property key symbol
+        idx0 (int): index value, meaning depends on property key
+        idx1 (int): index value, meaning depends on property key
         returns (float) the value
         """
         ret_val = c_double()
-        self.core.SA_SI_GetProperty_f64(self._id, c_uint32(property_key), byref(ret_val), c_size_t(0))
+        encoded_key = self.core.SA_SI_EPK(property_key, idx0, idx1)
+        self.core.SA_SI_GetProperty_f64(self._id, c_uint32(encoded_key), byref(ret_val), c_size_t(0))
         return ret_val.value
 
-    def GetProperty_i32(self, property_key):
+    def GetProperty_i32(self, property_key, idx0=0, idx1=0):
         """
         property_key (int32): property key symbol
+        idx0 (int): index value, meaning depends on property key
+        idx1 (int): index value, meaning depends on property key
         returns (int) the value
         """
         ret_val = c_int32()
-        self.core.SA_SI_GetProperty_i32(self._id, c_uint32(property_key), byref(ret_val), c_size_t(0))
+        encoded_key = self.core.SA_SI_EPK(property_key, idx0, idx1)
+        self.core.SA_SI_GetProperty_i32(self._id, c_uint32(encoded_key), byref(ret_val), c_size_t(0))
         return ret_val.value
 
-    def GetProperty_i64(self, property_key):
+    def GetProperty_i64(self, property_key, idx0=0, idx1=0):
         """
         property_key (int64): property key symbol
+        idx0 (int): index value, meaning depends on property key
+        idx1 (int): index value, meaning depends on property key
         returns (int) the value
         """
         ret_val = c_int64()
-        self.core.SA_SI_GetProperty_i64(self._id, c_uint32(property_key), byref(ret_val), c_size_t(0))
+        encoded_key = self.core.SA_SI_EPK(property_key, idx0, idx1)
+        self.core.SA_SI_GetProperty_i64(self._id, c_uint32(encoded_key), byref(ret_val), c_size_t(0))
         return ret_val.value
 
-    def GetProperty_s(self, property_key):
+    def GetProperty_s(self, property_key, idx0=0, idx1=0):
         """
         property_key (int32): property key symbol
+        idx0 (int): index value, meaning depends on property key
+        idx1 (int): index value, meaning depends on property key
         returns (str): the value
         """
         ret_val = create_string_buffer(SA_SIDLL.SA_SI_STRING_MAX_LENGTH)
-        self.core.SA_SI_GetProperty_s(self._id, c_uint32(property_key), ret_val)
+        encoded_key = self.core.SA_SI_EPK(property_key, idx0, idx1)
+        self.core.SA_SI_GetProperty_s(self._id, c_uint32(encoded_key), ret_val, byref(c_size_t(len(ret_val))))
         return ret_val.value.decode("latin1")
+
+    def GetValue_f64(self, channel, data_source_idx):
+        """
+        property_key (int32): property key symbol
+        data_source_idx:
+        returns (float) the value
+        """
+        ret_val = c_double()
+        self.core.SA_SI_GetValue_f64(self._id, channel, data_source_idx, byref(ret_val))
+        return ret_val.value
+
+    def WaitForEvent(self, event_type, end_state, timeout=float("inf")):
+        """
+        Blocks until event is triggered or timeout.
+        event_type (int): event code
+        timeout (float): maximum time to wait in s. If inf, it will wait forever.
+        returns (SA_SI_Event): the event code that was triggered
+        """
+        encoded_key = SA_SIDLL.SA_SI_EVENT_NOTIFICATION_ENABLED_PROP << 16 | event_type
+        self.core.SA_SI_SetProperty_i32(self._id, c_uint32(encoded_key), SA_SIDLL.SA_SI_ENABLED)
+
+        if timeout == float("inf"):
+            t = SA_SIDLL.SA_SI_TIMEOUT_INFINITE
+        else:
+            t = c_uint(int(timeout * 1000))
+        ev = SA_SI_Event()
+
+        state = None
+        while state != end_state:
+            self.core.SA_SI_WaitForEvent(self._id, byref(ev), t)
+            state = ev.devEventParameter & 0xffff
+            progress = (ev.devEventParameter & 0xffff0000) >> 16
+        return ev
+
+    def _updatePosition(self):
+        """
+        Updates the position VA.
+        """
+        try:
+            pos = {}
+            for ch in self.channels.values():
+                pos[ch] = self.GetValue_f64(ch, 0)  # position value is at index 0
+        except SA_SIError as ex:
+            if ex.errno == SA_SIDLL.SA_SI_ERROR_NOT_REFERENCED:
+                logging.warning("Position unknown because SA_MC is not referenced")
+                pos = {'x': 0, 'y': 0}
+            else:
+                raise
+
+        logging.debug("Updated position to %s.", pos)
+        self.position._set_value(pos, force_write=True)
 
     @isasync
     def reference(self, _=None):
@@ -3752,11 +3712,19 @@ class Picoscale(model.HwComponent):
 
                 # Reset reference so that if it fails, it states the axes are not
                 # referenced (anymore)
-                self.referenced._value = {a: False for a in self.axes.keys()}
+                self.referenced._value = {a: False for a in self.channels.keys()}
 
-                # The SA_MC references all axes at once.
-                logging.debug("Starting referencing")
-                self.Reference()
+                logging.debug("Starting referencing.")
+                # Calibrate the controller. Note - this is blocking
+                self.SetProperty_i32(SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP, SA_SIDLL.SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST)
+                print(self.GetProperty_i32(SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP))
+                time.sleep(1)
+                print(self.GetProperty_i32(SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP))
+                self.SetProperty_i32(SA_SIDLL.SA_PS_SYS_WORKING_DISTANCE_ACTIVATE_PROP, SA_SIDLL.SA_PS_WORKING_DISTANCE_SHRINK_MODE_LEFT_RIGHT)
+                time.sleep(5)
+                self.SetProperty_i32(SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP, SA_SIDLL.SA_PS_ADJUSTMENT_STATE_AUTO_ADJUST)
+                while self.GetProperty_i32(SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP) != SA_SIDLL.SA_PS_ADJUSTMENT_STATE_DISABLED:
+                    time.sleep(0.1)
 
             # wait till reference completes
             while not future._must_stop:
@@ -3794,10 +3762,21 @@ class Picoscale(model.HwComponent):
             # We only notify after updating the position so that when a listener
             # receives updates both values are already updated.
             if self._is_referenced():
-                self.referenced._value = {a: True for a in self.axes.keys()}
+                self.referenced._value = {a: True for a in self.channels.keys()}
                 self._updatePosition()
 
             self.referenced.notify(self.referenced.value)
+
+    def _createMoveFuture(self, ref=False):
+        """
+        ref: if true, will use a different canceller
+        Return (CancellableFuture): a future that can be used to manage a move
+        """
+        f = CancellableFuture()
+        f._moving_lock = threading.Lock()  # taken while moving
+        f._must_stop = False  # cancel of the current future requested
+        #f.task_canceller = self._cancelCurrentMove
+        return f
 
 
 class FakePicoscale_DLL(object):
@@ -3807,24 +3786,22 @@ class FakePicoscale_DLL(object):
 
     def __init__(self):
         self.properties = {
-            SA_CTLDLL.SA_CTL_PKEY_DEVICE_NAME: [0],
-            SA_CTLDLL.SA_CTL_PKEY_NUMBER_OF_CHANNELS: [3],
-            SA_CTLDLL.SA_CTL_PKEY_MOVE_MODE: [
-                    SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE,
-                    SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE,
-                    SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE,
+            SA_SIDLL.SA_SI_PKEY_DEVICE_NAME: [0],
+            SA_SIDLL.SA_SI_PKEY_NUMBER_OF_CHANNELS: [3],
+            SA_SIDLL.SA_SI_PKEY_MOVE_MODE: [
+                    SA_SIDLL.SA_SI_MOVE_MODE_CL_ABSOLUTE,
+                    SA_SIDLL.SA_SI_MOVE_MODE_CL_ABSOLUTE,
+                    SA_SIDLL.SA_SI_MOVE_MODE_CL_ABSOLUTE,
                     ],
-            SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE: [0, 0, 0],
-            SA_CTLDLL.SA_CTL_PKEY_POSITION: [0, 0, 0],
-            SA_CTLDLL.SA_CTL_PKEY_MOVE_VELOCITY: [1, 1, 1],
-            SA_CTLDLL.SA_CTL_PKEY_MOVE_ACCELERATION: [1, 1, 1],
-            SA_CTLDLL.SA_CTL_PKEY_HOLD_TIME: [0, 0, 0],
-            SA_CTLDLL.SA_CTL_PKEY_DEVICE_NAME: [b"Simulated"],
-            SA_CTLDLL.SA_CTL_PKEY_DEVICE_SERIAL_NUMBER: [b"1234"],
-            SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS: [0, 0, 0],
-            SA_CTLDLL.SA_CTL_PKEY_CALIBRATION_OPTIONS: [0, 0, 0],
-            SA_CTLDLL.SA_CTL_PKEY_LOGICAL_SCALE_OFFSET: [0, 0, 0],
-            SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE_NAME: [b"F4K3", b"F4K3", b"F4K3"],
+            SA_SIDLL.SA_SI_PKEY_CHANNEL_STATE: [0, 0, 0],
+            SA_SIDLL.SA_SI_PKEY_POSITION: [0, 0, 0],
+            SA_SIDLL.SA_SI_PKEY_HOLD_TIME: [0, 0, 0],
+            SA_SIDLL.SA_SI_PKEY_DEVICE_NAME: [b"Simulated"],
+            SA_SIDLL.SA_SI_PKEY_DEVICE_SERIAL_NUMBER: [b"1234"],
+            SA_SIDLL.SA_SI_PKEY_REFERENCING_OPTIONS: [0, 0, 0],
+            SA_SIDLL.SA_SI_PKEY_CALIBRATION_OPTIONS: [0, 0, 0],
+            SA_SIDLL.SA_SI_PKEY_LOGICAL_SCALE_OFFSET: [0, 0, 0],
+            SA_SIDLL.SA_SI_PKEY_POSITIONER_TYPE_NAME: [b"F4K3", b"F4K3", b"F4K3"],
         }
 
         self.target = [0, 0, 0]
@@ -3845,92 +3822,92 @@ class FakePicoscale_DLL(object):
     These functions are provided by the real SA_MC DLL
     """
 
-    def SA_CTL_Open(self, id, locator, options):
+    def SA_SI_Open(self, id, locator, options):
         logging.debug("sim MCS2: Starting MCS2 Sim")
 
-    def SA_CTL_Close(self, id):
+    def SA_SI_Close(self, id):
         logging.debug("sim MCS2: Closing MCS2 Sim")
 
-    def SA_CTL_GetFullVersionString(self):
+    def SA_SI_GetFullVersionString(self):
         return b"1.2.3.123"
 
-    def SA_CTL_SetProperty_f64(self, handle, ch, property_key, value):
+    def SA_SI_SetProperty_f64(self, handle, ch, property_key, value):
         if not property_key.value in self.properties:
-            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_KEY, "error")
         self.properties[property_key.value][ch.value] = value.value
 
-    def SA_CTL_SetProperty_i32(self, handle, ch, property_key, value):
+    def SA_SI_SetProperty_i32(self, handle, ch, property_key, value):
         if not property_key.value in self.properties:
-            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_KEY, "error")
         self.properties[property_key.value][ch.value] = value.value
 
-    def SA_CTL_SetProperty_i64(self, handle, ch, property_key, value):
+    def SA_SI_SetProperty_i64(self, handle, ch, property_key, value):
         if not property_key.value in self.properties:
-            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_KEY, "error")
         self.properties[property_key.value][ch.value] = value.value
 
-    def SA_CTL_GetProperty_f64(self, handle, ch, property_key, p_val, size):
+    def SA_SI_GetProperty_f64(self, handle, ch, property_key, p_val, size):
         if not property_key.value in self.properties:
-            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_KEY, "error")
         val = _deref(p_val, c_double)
         val.value = self.properties[property_key.value][ch.value]
 
-    def SA_CTL_GetProperty_i32(self, handle, ch, property_key, p_val, size):
+    def SA_SI_GetProperty_i32(self, handle, ch, property_key, p_val, size):
         if not property_key.value in self.properties:
-            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_KEY, "error")
 
         # Handle movement states before setting the value
-        if property_key.value == SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE:
+        if property_key.value == SA_SIDLL.SA_SI_PKEY_CHANNEL_STATE:
             if self.stopping.is_set():  # stopped before move could complete
                 # set the position to someplace in between
-                self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value] = int(
-                     (self.target[ch.value] + self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value]) / 2)
+                self.properties[SA_SIDLL.SA_SI_PKEY_POSITION][ch.value] = int(
+                     (self.target[ch.value] + self.properties[SA_SIDLL.SA_SI_PKEY_POSITION][ch.value]) / 2)
             elif self._current_move_finish < time.time():  # move is finished
-                self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value] = \
+                self.properties[SA_SIDLL.SA_SI_PKEY_POSITION][ch.value] = \
                     int(self.target[ch.value])
-                self.properties[SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE][ch.value] &= \
-                    ~ (SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING)
+                self.properties[SA_SIDLL.SA_SI_PKEY_CHANNEL_STATE][ch.value] &= \
+                    ~ (SA_SIDLL.SA_SI_CH_STATE_BIT_ACTIVELY_MOVING)
         # update the value of the key
         val = _deref(p_val, c_int32)
         val.value = self.properties[property_key.value][ch.value]
 
-    def SA_CTL_GetProperty_i64(self, handle, ch, property_key, p_val, size):
+    def SA_SI_GetProperty_i64(self, handle, ch, property_key, p_val, size):
         if not property_key.value in self.properties:
-            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_KEY, "error")
         val = _deref(p_val, c_int64)
         val.value = self.properties[property_key.value][ch.value]
 
-    def SA_CTL_GetProperty_s(self, handle, ch, property_key, val, ioArraySize):
+    def SA_SI_GetProperty_s(self, handle, ch, property_key, val, ioArraySize):
         if not property_key.value in self.properties:
-            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_KEY, "error")
         val.value = self.properties[property_key.value][ch.value]
 
-    def SA_CTL_Reference(self, handle, ch, _):
+    def SA_SI_Reference(self, handle, ch, _):
         logging.debug("sim MCS2: Referencing channel %d", ch.value)
-        self.properties[SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE][ch.value] |= SA_CTLDLL.SA_CTL_CH_STATE_BIT_IS_REFERENCED
+        self.properties[SA_SIDLL.SA_SI_PKEY_CHANNEL_STATE][ch.value] |= SA_SIDLL.SA_SI_CH_STATE_BIT_IS_REFERENCED
 
         # Simulating a move to 0 in 5 s
-        self.properties[SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE][ch.value] |= SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING
+        self.properties[SA_SIDLL.SA_SI_PKEY_CHANNEL_STATE][ch.value] |= SA_SIDLL.SA_SI_CH_STATE_BIT_ACTIVELY_MOVING
         self.stopping.clear()
         self._current_move_finish = time.time() + 5
         self.target[ch.value] = 0
 
-    def SA_CTL_Calibrate(self, handle, ch, _):
+    def SA_SI_Calibrate(self, handle, ch, _):
         logging.debug("sim MCS2: Calibrating channel %d", ch.value)
 
-    def SA_CTL_Move(self, handle, ch, pos_pm, _):
+    def SA_SI_Move(self, handle, ch, pos_pm, _):
         self.stopping.clear()
         if self._pos_in_range(ch.value, pos_pm.value):
             self._current_move_finish = time.time() + 1.0
-            if self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_MODE][ch.value] == SA_CTLDLL.SA_CTL_MOVE_MODE_CL_ABSOLUTE:
+            if self.properties[SA_SIDLL.SA_SI_PKEY_MOVE_MODE][ch.value] == SA_SIDLL.SA_SI_MOVE_MODE_CL_ABSOLUTE:
                 self.target[ch.value] = pos_pm.value
                 logging.debug("sim MCS2: Abs move channel %d to %d pm" % (ch.value, pos_pm.value))
-            elif self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_MODE][ch.value] == SA_CTLDLL.SA_CTL_MOVE_MODE_CL_RELATIVE:
-                self.target[ch.value] = pos_pm.value + self.properties[SA_CTLDLL.SA_CTL_PKEY_POSITION][ch.value]
+            elif self.properties[SA_SIDLL.SA_SI_PKEY_MOVE_MODE][ch.value] == SA_SIDLL.SA_SI_MOVE_MODE_CL_RELATIVE:
+                self.target[ch.value] = pos_pm.value + self.properties[SA_SIDLL.SA_SI_PKEY_POSITION][ch.value]
                 logging.debug("sim MCS2: Rel move channel %d to %d pm" % (ch.value, self.target[ch.value]))
-            self.properties[SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE][ch.value] |= SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING
+            self.properties[SA_SIDLL.SA_SI_PKEY_CHANNEL_STATE][ch.value] |= SA_SIDLL.SA_SI_CH_STATE_BIT_ACTIVELY_MOVING
         else:
-            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_RANGE_LIMIT_REACHED, "error")
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_RANGE_LIMIT_REACHED, "error")
 
-    def SA_CTL_Stop(self, handle, ch, _):
+    def SA_SI_Stop(self, handle, ch, _):
         self.stopping.set()

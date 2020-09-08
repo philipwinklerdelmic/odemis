@@ -485,5 +485,64 @@ class TestMCS2(unittest.TestCase):
         # test.assert_pos_almost_equal(self.dev.position.value, {'x': 0, 'y': 0, 'z': 0}, **COMP_ARGS)
 
 
+CONFIG_Picoscale = {"name": "Stage Metrology",
+                    "role": "metrology",
+                    "ref_on_init": True,
+                    "locator": "network:sn:PSC-00000178",#"network:sn:MCS2-00001604",
+                    "channels": {'x1': 0, 'x2': 1},
+                    "precision_level": 5,
+                    }
+
+
+if TEST_NOHW:
+    CONFIG_Picoscale['locator'] = 'fake'
+
+
+class TestPicoscale(unittest.TestCase):
+    """
+    Tests cases for the SmarAct MCS2 controller
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        print(smaract.Picoscale.scan())
+        cls.dev = smaract.Picoscale(**CONFIG_Picoscale)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dev.terminate()
+
+    def test_reference(self):
+        f = self.dev.reference()
+        f.result()
+
+        for a, i in self.dev.referenced.value.items():
+            self.assertTrue(i)
+
+        # TODO: some hardware have fancy multi-marks, which means that the referencing
+        # doesn't necessarily end-up at 0, and everytime the axis is referenced
+        # it can end up at a different mark.
+        # test.assert_pos_almost_equal(self.dev.position.value, {'x': 0, 'y': 0, 'z': 0}, **COMP_ARGS)
+
+        # Try again, after a move
+        shift = {'x': 1e-3, 'y':-1e-3}
+        self.dev.moveRel(shift).result()
+        pos_move = dict(self.dev.position.value)
+
+        f = self.dev.reference()
+        f.result()
+        pos_refd = dict(self.dev.position.value)
+
+        for a, i in self.dev.referenced.value.items():
+            self.assertTrue(i)
+
+        # Check that at least the position changed
+        self.assertNotEqual(pos_move["x"], pos_refd["x"])
+        # test.assert_pos_almost_equal(self.dev.position.value, {'x': 0, 'y': 0, 'z': 0}, **COMP_ARGS)
+
+    def test_position(self):
+        pass
+
+
 if __name__ == '__main__':
     unittest.main()
