@@ -2806,3 +2806,16 @@ class LinkedHeightFocus(model.Actuator):
                 raise CancelledError()
             future._running_subf = self._lensz.reference(axes)
         future._running_subf.result()
+
+
+class DualChannelPositionSensor(model.HwComponent):
+    """
+    This is a wrapper for a sensor with three position channels. The position outputs of the sensor are
+    converted to a two-channel output (typically x and y). The additional information provided by the third
+    sensor channel is used to calculate a rotation.
+    
+    """
+
+    def __init__(self, name, role, parent, dependencies, rng, executor, **kwargs):
+        pass
+        # Picoscale as a child?
