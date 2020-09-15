@@ -2817,5 +2817,18 @@ class DualChannelPositionSensor(model.HwComponent):
     """
 
     def __init__(self, name, role, parent, dependencies, rng, executor, **kwargs):
-        pass
-        # Picoscale as a child?
+
+        # Check sensor dependency
+        try:
+            self.sensor = dependencies["sensor"]
+        except KeyError:
+            raise ValueError("DualChannelPositionSensor requires a 'sensor' dependency.")
+
+        if not hasattr(self.sensor, 'channels') or ...
+
+        self.position = model.VigilantAttribute({}, readonly=True)
+        self.rotation = model.FloatVA(readonly=True)
+
+    def reference(self):
+        self.sensor.reference()
+

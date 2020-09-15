@@ -3328,6 +3328,12 @@ class SA_SIDLL(CDLL):
     SA_PS_FILTER_SETTING_CHANGED_EVENT = 0x8a82
     SA_PS_AF_CHANNEL_VALIDATION_PROGRESS_EVENT = 0x8a83
 
+    # Features
+    FEATURE_ADVANCED_TRIGGER_SYSTEM = 0
+    FEATURE_SIGNAL_GENERATORS = 1
+    FEATURE_CALCULATION_SYSTEM = 2
+    FEATURE_PRECISION_MODE = 3
+
     def __init__(self):
         if os.name == "nt":
             raise NotImplemented("Windows not yet supported")
@@ -3406,18 +3412,19 @@ class Picoscale(model.HwComponent):
 
     Attributes
     ==========
-    .position (VA, dict str --> float): position in m for each channel
-    .channels (dict str --> int)
+    .position (VA: str --> float): position in m for each channel
+    .channels (dict str --> int): maps channel name to channel number
+    .referenced (VA: str --> bool): indicates which channels have been referenced
 
     Functions
     =========
-    .reference: call to the adjustment routine required for precise position values
-    .stop: cancel all calls to the device
-    .scan (static method): return list of all available Picoscale controllers
+    .reference: performs adjustment routine required for precise position values
+    .stop: cancels all calls to the device
+    .scan (static method): returns list of all available Picoscale controllers
     (+ wrapper functions for Picoscale API)
     """
 
-    def __init__(self, name, role, locator, channels, ref_on_init, precision_level=0, *args, **kwargs):
+    def __init__(self, name, role, locator, channels, ref_on_init, precision_mode=0, *args, **kwargs):
         """
         name: (str)
         role: (str)
@@ -3435,7 +3442,7 @@ class Picoscale(model.HwComponent):
         channels: (str --> int) dictionary mapping channel names to channel numbers
         ref_on_init: (bool) determines if the controller should automatically reference
             on initialization
-        precision_level: (0 <= int <= 5) strength of digital lowpass filter, a higher level corresponds to higher
+        precision_mode: (0 <= int <= 5) strength of digital lowpass filter, a higher level corresponds to higher
             precision, but lower velocity. Not available on all systems.
         """
         model.HwComponent.__init__(self, name, role, *args, **kwargs)
@@ -3456,7 +3463,7 @@ class Picoscale(model.HwComponent):
         devname = self.GetProperty_s(SA_SIDLL.SA_SI_DEVICE_NAME_PROP)
         sn = self.GetProperty_s(SA_SIDLL.SA_SI_DEVICE_SERIAL_NUMBER_PROP)
         num_ch = self.GetNumberOfChannels()
-        self._hwVersion = "SmarAct Picoscale %s (s/n %s) with %s channels." % (devname, sn, num_ch,)
+        self._hwVersion = "SmarAct %s (s/n %s) with %s channels." % (devname, sn, num_ch,)
         self._swVersion = self.GetFullVersionString()
         logging.debug("Using Picoscale library version %s to connect to %s. ", self._swVersion, self._hwVersion)
 
@@ -3472,32 +3479,38 @@ class Picoscale(model.HwComponent):
         self._polling_thread = util.RepeatingTimer(1, self._updatePosition, "Position polling")
         self._polling_thread.start()
 
-        # Referencing
-        self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
-        axes_ref = {a: self._is_channel_referenced(i) for a, i in self.channels.items()}
-        self.referenced = model.VigilantAttribute(axes_ref, readonly=True)  # VA dict str(axis) -> bool
-
-        # If ref_on_init, referenced immediately.
-        if all(referenced for _, referenced in axes_ref.items()):
-            logging.debug("Picoscale is referenced")
-        else:
-            if ref_on_init:
-                self.reference().result()
-            else:
-                logging.warning("Picoscale is not referenced. The device will not function until referencing occurs.")
-
-        # Set precision mode if available
+        # Precision mode
         # The precision mode is a special feature that needs to be purchased separately, so it is not available
         # by default.
-        #
+        # TODO: this functionality has not yet been tested
         if precision_mode != 0:
-          pm_time = self.GetPrecisionModeTime()
+            if not self.IsFeatureEnabled(SA_SIDLL.FEATURE_PRECISION_MODE):
+                raise ValueError("Device does not have precision mode. This feature needs to be purchased separately.")
+            self.SetPrecisionMode(precision_mode)
+
+        # Referencing
+        # After the validation process above, the parameters from the previous referencing procedure
+        # are reloaded. The system is ready to use and might produce reasonable position values. However,
+        # it is recommended to reference (i.e. adjust) the system frequently (at least during startup)
+        # since even small changes in the experimental setup or environment might cause the old
+        # adjustment parameters to become non-ideal. Therefore, the values for all channels in .referenced
+        # will be False, until the referencing routine has been performed.
+        self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
+        channel_ref = {ch: False for ch in self.channels}
+        self.referenced = model.VigilantAttribute(channel_ref, readonly=True)  # VA dict str(channel) -> bool
+        if ref_on_init:
+            self.reference().result()
+        else:
+            logging.warning("Picoscale is not referenced. The reported positions might not be accurate "
+                            "until referencing occurs.")
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
         self._polling_thread.cancel()
-        self.stop()
-        self.core.SA_SI_Close(self._id)
+        if self._executor:
+            self.stop()
+            self.core.SA_SI_Close(self._id)
+            self._executor = None
         super(Picoscale, self).terminate()
 
     @staticmethod
@@ -3550,20 +3563,45 @@ class Picoscale(model.HwComponent):
         """
         return self.GetProperty_i32(SA_SIDLL.SA_SI_NUMBER_OF_CHANNELS_PROP)
 
-    def _is_channel_referenced(self, ch):
-        # TODO
-        return False
+    def IsStable(self):
+        """
+        Indicates whether the system is stable and ready to produce position data.
+        returns: (bool)
+        """
+        return bool(self.GetProperty_i32(SA_SIDLL.SA_PS_SYS_IS_STABLE_PROP))
 
-    def _is_referenced(self):
+    def IsValid(self, ch):
         """
-        Ask the controller if it is referenced
+        Indicates whether a channel is ready to produce position data.
+        A channel should be valid after referencing or after channel validation.
+        returns: (bool)
         """
-        # TODO
-        return True
+        return bool(self.GetProperty_i32(SA_SIDLL.SA_PS_CH_IS_VALID_PROP, idx0=ch))
+
+    def IsFeatureEnabled(self, feature):
+        """
+        Check if hardware has extra feature which is not available on the standard system.
+        feature: (int) must be one of
+            SA_SIDLL.FEATURE_ADVANCED_TRIGGER_SYSTEM
+            SA_SIDLL.FEATURE_SIGNAL_GENERATORS
+            SA_SIDLL.FEATURE_CALCULATION_SYSTEM
+            SA_SIDLL.FEATURE_PRECISION_MODE
+        returns: (bool)
+        """
+        return bool(self.GetProperty_i32(SA_SIDLL.SA_PS_SYS_FEATURE_TIME_PROP, idx0=feature))
+
+    def SetPrecisionMode(self, precision_mode):
+        """
+        Configure precision mode to desired level. This only works if the precision_mode feature has been
+        purchased.
+        precision_mode: (0 <= int <= 5) higher level corresponds to higher precision, 0 means feature is disabled.
+        """
+        self.SetProperty_f64(SA_SIDLL.SA_PS_SYS_PRECISION_MODE_PROP, precision_mode)
 
     def GetFullVersionString(self):
         """
-
+        Returns the version of the library.
+        returns: (str)
         """
         ver = self.core.SA_SI_GetFullVersionString()
         return ver.decode("latin1")
@@ -3576,14 +3614,21 @@ class Picoscale(model.HwComponent):
 
     def LoadConfiguration(self):
         """
-        Load the configuration of the device (working distance, etc). Usually, the configuration parameters
-        are set during installation. This function is blocking.
+        Load the configuration of the device. The loaded parameters are
+        * fiber length
+        * extension fiber length
+        * number of active channels
+        * sensor head types
+        * minimum and maximum working distance
+        These configuration parameters need to be set during the installation of the system.
+        Additionally, the parameters from the previous referencing procedure are loaded.
+        This function is blocking.
         """
         # Loading the configuration will cause the state to become temporarily unstable. Once the process is
         # finished, the state will be stable again.
         self.EnableEventNotification(SA_SIDLL.SA_PS_STABLE_STATE_CHANGED_EVENT)
         self.SetProperty_i32(SA_SIDLL.SA_PS_AF_ADJUSTMENT_RESULT_LOAD_PROP, SA_SIDLL.SA_SI_ENABLED)
-        self.WaitForEvent(SA_SIDLL.SA_PS_STABLE_STATE_CHANGED_EVENT, SA_SIDLL.SA_SI_ENABLED)
+        self.WaitForEvent(SA_SIDLL.SA_SI_ENABLED)
         self.DisableEventNotification(SA_SIDLL.SA_PS_STABLE_STATE_CHANGED_EVENT)
 
     def ValidateChannels(self):
@@ -3591,10 +3636,12 @@ class Picoscale(model.HwComponent):
         Validate the channels. This function is blocking.
         This is a quick adjustment routine which needs to be performed after loading the configuration.
         """
-        self.EnableEventNotification(SA_SIDLL.SA_PS_AF_CHANNEL_VALIDATION_PROGRESS_EVENT)
+        # There is also a channel validation progress event, but it's triggered too early. We need
+        # to wait until the state becomes stable again before continuing.
+        self.EnableEventNotification(SA_SIDLL.SA_PS_STABLE_STATE_CHANGED_EVENT)
         self.SetProperty_i32(SA_SIDLL.SA_PS_AF_CHANNEL_VALIDATION_STATE_PROP, SA_SIDLL.SA_SI_ENABLED)
-        self.WaitForEvent(SA_SIDLL.SA_PS_AF_CHANNEL_VALIDATION_PROGRESS_EVENT, SA_SIDLL.SA_SI_ENABLED)
-        self.DisableEventNotification(SA_SIDLL.SA_PS_AF_CHANNEL_VALIDATION_PROGRESS_EVENT)
+        self.WaitForEvent(SA_SIDLL.SA_SI_ENABLED)
+        self.DisableEventNotification(SA_SIDLL.SA_PS_STABLE_STATE_CHANGED_EVENT)
 
     def EnableChannel(self, channel):
         """
@@ -3607,29 +3654,27 @@ class Picoscale(model.HwComponent):
         while self.GetProperty_i32(self.core.SA_PS_CH_ENABLED_PROP, idx0=channel) != SA_SIDLL.SA_SI_ENABLED:
             time.sleep(0.1)
 
-    def EnableFeature(self):
-        pass
-
     def EnableEventNotification(self, event_type):
         """
-
+        Enables notifications for an event type.
+        event_type: (int) SA_SIDLL event type
         """
         encoded_key = SA_SIDLL.SA_SI_EVENT_NOTIFICATION_ENABLED_PROP << 16 | event_type
         self.core.SA_SI_SetProperty_i32(self._id, c_uint32(encoded_key), SA_SIDLL.SA_SI_ENABLED)
 
     def DisableEventNotification(self, event_type):
         """
-
+        Disables notifications for an event type.
+        event_type: (int) SA_SIDLL event type
         """
         encoded_key = SA_SIDLL.SA_SI_EVENT_NOTIFICATION_ENABLED_PROP << 16 | event_type
         self.core.SA_SI_SetProperty_i32(self._id, c_uint32(encoded_key), SA_SIDLL.SA_SI_DISABLED)
 
-    def WaitForEvent(self, event_type, end_state, timeout=float("inf")):
+    def WaitForEvent(self, end_state, timeout=float("inf")):
         """
         Blocks until event is triggered or timeout.
-        event_type (int): event code
+        end_state (int): state of event variable to wait for
         timeout (float): maximum time to wait in s. If inf, it will wait forever.
-        returns (SA_SI_Event): the event code that was triggered
         """
         try:
             if timeout == float("inf"):
@@ -3648,8 +3693,6 @@ class Picoscale(model.HwComponent):
                 # TODO: check sa_si_cancelled
         except Exception as ex:
             raise ex
-
-        return ev
 
     # Functions to set the property values in the controller, categorized by data type
     def SetProperty_f64(self, property_key, value, idx0=0, idx1=0):
@@ -3759,7 +3802,7 @@ class Picoscale(model.HwComponent):
 
     def _doReference(self, future):
         """
-        Actually runs the referencing code
+        Actually runs the referencing code.
         future (Future): the future it handles
         raise:
             IOError: if referencing failed due to hardware
@@ -3769,7 +3812,6 @@ class Picoscale(model.HwComponent):
             with future._moving_lock:
                 if future._must_stop:
                     raise CancelledError()
-                time.sleep(5)
                 # Reset reference so that if it fails, it states the axes are not referenced (anymore)
                 self.referenced._value = {a: False for a in self.channels.keys()}
                 logging.debug("Starting referencing.")
@@ -3778,19 +3820,19 @@ class Picoscale(model.HwComponent):
                 self.EnableEventNotification(SA_SIDLL.SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT)
                 self.SetProperty_i32(SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP,
                                      SA_SIDLL.SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST)
-                self.WaitForEvent(SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP,
-                                  SA_SIDLL.SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST)
+                self.WaitForEvent(SA_SIDLL.SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST)
 
                 # Activate working distance
                 self.SetProperty_i32(SA_SIDLL.SA_PS_SYS_WORKING_DISTANCE_ACTIVATE_PROP,
                                      SA_SIDLL.SA_PS_WORKING_DISTANCE_SHRINK_MODE_LEFT_RIGHT)
-                time.sleep(1)  # attribute is write-only and there is not corresponding event type --> wait 1 s
+                # attribute is write-only and there is no corresponding event type (yet some waiting time is necessary)
+                # --> wait 1 s for command to be processed
+                time.sleep(1)
 
                 # Switch to automatic adjustment
                 self.SetProperty_i32(SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP,
                                      SA_SIDLL.SA_PS_ADJUSTMENT_STATE_AUTO_ADJUST)
-                self.WaitForEvent(SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP,
-                                  SA_SIDLL.SA_PS_ADJUSTMENT_STATE_DISABLED)  # state will be DISABLED when done
+                self.WaitForEvent(SA_SIDLL.SA_PS_ADJUSTMENT_STATE_DISABLED)  # state will be DISABLED when done
                 logging.debug("Finished referencing.")
         except SA_SIError as ex:
             # This occurs if a stop command interrupts referencing
@@ -3810,12 +3852,15 @@ class Picoscale(model.HwComponent):
             raise
         finally:
             self.DisableEventNotification(SA_SIDLL.SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT)
+            # If the state of the device is stable and all channels are valid, the referencing procedure
+            # succeeded. Typically, all channels become valid at the same time during the reference procedure.
+            # We still check all of them inidividually to be sure.
+            if self.IsStable():
+                for ch, num in self.channels.items():
+                    self.referenced._value[ch] = self.IsValid(num)
+            self._updatePosition()
             # We only notify after updating the position so that when a listener
             # receives updates both values are already updated.
-            if self._is_referenced():
-                self.referenced._value = {a: True for a in self.channels.keys()}
-                self._updatePosition()
-
             self.referenced.notify(self.referenced.value)
 
     def _updatePosition(self):
