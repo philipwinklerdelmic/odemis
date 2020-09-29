@@ -32,7 +32,7 @@ print(odemis.__file__)
 from odemis.driver import simulated, tmcm
 from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
     CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator, LinearActuator, LinkedHeightActuator, \
-    LinkedHeightFocus
+    LinkedHeightFocus, DualChannelPositionSensor
 from odemis.util import test
 import os
 import time
@@ -1590,6 +1590,32 @@ class TestLinkedHeightActuator(unittest.TestCase):
         self.assertTrue(cancelled)
         # Some axes could be referenced during this time but not all
         self.assertFalse(all(stage.referenced.value.values()))
+
+
+class TestDualChannelPositionSensor(unittest.TestCase):
+
+    def setUpClass(cls):
+        """
+        Construct DualChannelPositionSensor object and its dependent sensor.
+        """
+        sensor = odemis.driver.smaract.Picoscale(name="Stage Metrology",
+                                                 role="metrology",
+                                                 ref_on_init=False,
+                                                 locator="fake",
+                                                 channels={'x1': 0, 'x2': 1, 'y1': 2},
+                                                 )
+        cls.dev = DualChannelPositionSensor(name="",
+                                            role="",
+                                            dependencies={"sensor": sensor},
+                                            channels={'x': {"primary": 'x1', "secondary": 'x2'}, 'y': 'y1'},
+                                            distance=1e-6,
+                                            )
+
+    def test_position_rotation_update(self):
+        """
+        The .position and .rotation VAs should be updated every time the .position VA of the sensor is updated.
+        """
+        self.dev.sensor._updatePosition()
 
 
 if __name__ == "__main__":

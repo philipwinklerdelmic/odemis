@@ -3367,7 +3367,7 @@ class SA_SIDLL(CDLL):
         """
         if result != SA_SIDLL.SA_SI_ERROR_NONE:
             raise SA_SIError(result, "Call to %s() failed with error 0x%x: %s" %
-                              (func.__name__, result, SA_SIDLL.err_code.get(result, "")))
+                            (func.__name__, result, SA_SIDLL.err_code.get(result, "")))
 
         return result
 
@@ -3382,7 +3382,7 @@ class SA_SIError(IOError):
 
 class SA_SI_EventData(Union):
     """
-    SA_MC event data is stored as this type of union (A C union used by DLL)
+    SA_SI event data is stored as this type of union (A C union used by DLL)
     """
     _fields_ = [
         ("error", c_uint32),
@@ -3394,7 +3394,7 @@ class SA_SI_EventData(Union):
 
 class SA_SI_Event(Structure):
     """
-    SA_MC Event structure (C struct used by DLL)
+    SA_SI Event structure (C struct used by DLL)
     """
     _anonymous_ = ("u",)
     _fields_ = [
@@ -3469,13 +3469,21 @@ class Picoscale(model.HwComponent):
 
         # Device setup
         self.EnableFullAccess()
-        self.LoadConfiguration()
-        self.ValidateChannels()
-        for ch in self.channels.values():
-            self.EnableChannel(ch)
+        try:
+            self.LoadConfiguration()
+        except SA_SIError as ex:
+            raise ValueError("Failed to load configuration. This might indicate that the device is not "
+                             "configured properly. Error: %s." % ex)
+
+        # Log configuration
+        flen = self.GetFiberLength()
+        ext_flen = self.GetExtensionFiberLength()
+        wdist_min, wdist_max = self.GetWorkingDistance()
+        logging.debug("Picoscale configuration: fiber length %s, extension fiber length %s, "
+                      "working distance [%s, %s].", flen, ext_flen, wdist_min, wdist_max)
 
         # Position polling
-        self.position = model.VigilantAttribute({}, readonly=True)
+        self.position = model.VigilantAttribute({}, getter=self._getPosition, readonly=True)
         self._polling_thread = util.RepeatingTimer(1, self._updatePosition, "Position polling")
         self._polling_thread.start()
 
@@ -3488,21 +3496,30 @@ class Picoscale(model.HwComponent):
                 raise ValueError("Device does not have precision mode. This feature needs to be purchased separately.")
             self.SetPrecisionMode(precision_mode)
 
+        # State: starting until first referencing/validation procedure is done
+        self.state._set_value(model.ST_STARTING, force_write=True)
+
         # Referencing
-        # After the validation process above, the parameters from the previous referencing procedure
-        # are reloaded. The system is ready to use and might produce reasonable position values. However,
+        # There are two options for referencing: the full referencing procedure and the shorter validation
+        # procedure. The validation procedure reuses the referencing parameters stored in memory. Afterwards,
+        # the system is ready to use and might produce reasonable position values. However,
         # it is recommended to reference (i.e. adjust) the system frequently (at least during startup)
         # since even small changes in the experimental setup or environment might cause the old
         # adjustment parameters to become non-ideal. Therefore, the values for all channels in .referenced
-        # will be False, until the referencing routine has been performed.
+        # will be False, until the full referencing routine has been performed.
+        # These procedure can take a while (up to 10 minutes), especially after the power of the system
+        # has just been turned on. Therefore, we don't wait until the procedure is complete.
+        # Starting from standby is generally much faster.
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
         channel_ref = {ch: False for ch in self.channels}
         self.referenced = model.VigilantAttribute(channel_ref, readonly=True)  # VA dict str(channel) -> bool
         if ref_on_init:
-            self.reference().result()
+            f = self.reference()
         else:
+            f = self._validate()
             logging.warning("Picoscale is not referenced. The reported positions might not be accurate "
                             "until referencing occurs.")
+        f.add_done_callback(self._on_referenced)
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
@@ -3543,6 +3560,9 @@ class Picoscale(model.HwComponent):
                 network:sn:<serial_number>
         returns: (int) device handle for API functions
         """
+        if locator == "fake":
+            return 0
+
         # TODO: try multiple times, first time sometimes doesn't work
         logging.debug("Connecting to locator %s.", locator)
         core = SA_SIDLL()
@@ -3550,13 +3570,46 @@ class Picoscale(model.HwComponent):
         try:
             core.SA_SI_Open(byref(id), c_char_p(locator.encode("ascii")), c_char_p(b""))
         except SA_SIError as ex:
-            if ex.errno == SA_SIDLL.SA_SI_ERROR_INITIALIZATION:
-                raise model.HwError("Failed to find device, check it is connected and turned on.")
-            raise
+            # After a cold start of the device, an initialization error is raised the first time
+            # we try to establish a connection. It always works on the second trial.
+            logging.debug("Failed to connect to device with ID %d, trying again." % id.value)
+            try:
+                core.SA_SI_Open(byref(id), c_char_p(locator.encode("ascii")), c_char_p(b""))
+            except SA_SIError as ex:
+                if ex.errno == SA_SIDLL.SA_SI_ERROR_INITIALIZATION:
+                    raise model.HwError("Failed to find device, check it is connected and turned on.")
+                raise
         logging.debug("Connected to Picoscale Controller with ID %d.", id.value)
         return id
 
     # API functions
+    def GetFiberLength(self):
+        """
+        returns: (float) fiber length in mm
+        """
+        return self.GetProperty_f64(SA_SIDLL.SA_PS_SYS_FIBERLENGTH_HEAD_PROP)
+
+    def GetExtensionFiberLength(self):
+        """
+        returns: (float) extension fiber length
+        """
+        return self.GetProperty_f64(SA_SIDLL.SA_PS_SYS_FIBERLENGTH_EXTENSION_PROP)
+
+    def GetWorkingDistance(self):
+        """
+        returns: (float, float) minimum and maximum working distance
+        """
+        min_dist = self.GetProperty_f64(SA_SIDLL.SA_PS_SYS_WORKING_DISTANCE_MIN_PROP)
+        max_dist = self.GetProperty_f64(SA_SIDLL.SA_PS_SYS_WORKING_DISTANCE_MAX_PROP)
+        return min_dist, max_dist
+
+    def GetAdjustmentState(self):
+        """
+        returns: (SA_PS_ADJUSTMENT_STATE_DISABLED, SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST,
+        SA_PS_ADJUSTMENT_STATE_AUTO_ADJUST)
+        """
+        return self.GetProperty_i32(SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP)
+
     def GetNumberOfChannels(self):
         """
         returns: (int) number of channels offered by device
@@ -3621,15 +3674,26 @@ class Picoscale(model.HwComponent):
         * sensor head types
         * minimum and maximum working distance
         These configuration parameters need to be set during the installation of the system.
-        Additionally, the parameters from the previous referencing procedure are loaded.
+        Additionally, the parameters from the previously saved referencing procedure are loaded.
         This function is blocking.
         """
         # Loading the configuration will cause the state to become temporarily unstable. Once the process is
         # finished, the state will be stable again.
         self.EnableEventNotification(SA_SIDLL.SA_PS_STABLE_STATE_CHANGED_EVENT)
         self.SetProperty_i32(SA_SIDLL.SA_PS_AF_ADJUSTMENT_RESULT_LOAD_PROP, SA_SIDLL.SA_SI_ENABLED)
-        self.WaitForEvent(SA_SIDLL.SA_SI_ENABLED)
+        self.WaitForEvent(SA_SIDLL.SA_SI_ENABLED, timeout=600)  # this can take a long time
         self.DisableEventNotification(SA_SIDLL.SA_PS_STABLE_STATE_CHANGED_EVENT)
+
+    def SaveConfiguration(self):
+        """
+        Saves the configuration parameters (cf LoadConfiguration) and internal parameters of the
+        referencing procedure. This function is blocking.
+        """
+        self.SetProperty_i32(SA_SIDLL.SA_PS_AF_ADJUSTMENT_RESULT_SAVE_PROP, SA_SIDLL.SA_SI_ENABLED)
+        # There is no documentation on loading/saving the configuration in the manual, even though
+        # the functions are available in the header file. It is not clear how much time saving the
+        # parameters takes. It can be assumed that it's fast --> wait 1 s.
+        time.sleep(1)
 
     def ValidateChannels(self):
         """
@@ -3651,7 +3715,7 @@ class Picoscale(model.HwComponent):
         self.SetProperty_i32(SA_SIDLL.SA_PS_CH_ENABLED_PROP, SA_SIDLL.SA_SI_ENABLED, idx0=channel)
         # Channel enabled event not triggered if it was already enabled
         # --> poll SA_PS_CH_ENABLED_PROP attribute instead
-        while self.GetProperty_i32(self.core.SA_PS_CH_ENABLED_PROP, idx0=channel) != SA_SIDLL.SA_SI_ENABLED:
+        while self.GetProperty_i32(SA_SIDLL.SA_PS_CH_ENABLED_PROP, idx0=channel) != SA_SIDLL.SA_SI_ENABLED:
             time.sleep(0.1)
 
     def EnableEventNotification(self, event_type):
@@ -3660,7 +3724,7 @@ class Picoscale(model.HwComponent):
         event_type: (int) SA_SIDLL event type
         """
         encoded_key = SA_SIDLL.SA_SI_EVENT_NOTIFICATION_ENABLED_PROP << 16 | event_type
-        self.core.SA_SI_SetProperty_i32(self._id, c_uint32(encoded_key), SA_SIDLL.SA_SI_ENABLED)
+        self.core.SA_SI_SetProperty_i32(self._id, c_uint32(encoded_key), c_int32(SA_SIDLL.SA_SI_ENABLED))
 
     def DisableEventNotification(self, event_type):
         """
@@ -3668,7 +3732,7 @@ class Picoscale(model.HwComponent):
         event_type: (int) SA_SIDLL event type
         """
         encoded_key = SA_SIDLL.SA_SI_EVENT_NOTIFICATION_ENABLED_PROP << 16 | event_type
-        self.core.SA_SI_SetProperty_i32(self._id, c_uint32(encoded_key), SA_SIDLL.SA_SI_DISABLED)
+        self.core.SA_SI_SetProperty_i32(self._id, c_uint32(encoded_key), c_int32(SA_SIDLL.SA_SI_DISABLED))
 
     def WaitForEvent(self, end_state, timeout=float("inf")):
         """
@@ -3676,23 +3740,20 @@ class Picoscale(model.HwComponent):
         end_state (int): state of event variable to wait for
         timeout (float): maximum time to wait in s. If inf, it will wait forever.
         """
-        try:
-            if timeout == float("inf"):
-                t = SA_SIDLL.SA_SI_TIMEOUT_INFINITE
-            else:
-                t = c_uint(int(timeout * 1000))
-            ev = SA_SI_Event()
+        if timeout == float("inf"):
+            t = SA_SIDLL.SA_SI_TIMEOUT_INFINITE
+        else:
+            t = c_uint(int(timeout * 1000))
+        ev = SA_SI_Event()
 
-            state = None
-            while state != end_state:
-                # Don't check event type, it's not always accurate.
-                # Instead, only one event is active and all other events are disabled, so it is clear
-                # which event we are waiting for.
-                self.core.SA_SI_WaitForEvent(self._id, byref(ev), t)
-                state = ev.devEventParameter & 0xffff
-                # TODO: check sa_si_cancelled
-        except Exception as ex:
-            raise ex
+        state = None
+        while state != end_state:
+            # Don't check event type, it's not always accurate.
+            # Instead, only one event is active and all other events are disabled, so it is clear
+            # which event we are waiting for.
+            self.core.SA_SI_WaitForEvent(self._id, byref(ev), t)
+            state = ev.devEventParameter & 0xffff
+            time.sleep(0.1)
 
     # Functions to set the property values in the controller, categorized by data type
     def SetProperty_f64(self, property_key, value, idx0=0, idx1=0):
@@ -3713,7 +3774,7 @@ class Picoscale(model.HwComponent):
         idx1 (int): index value, meaning depends on property key
         """
         encoded_key = self.core.SA_SI_EPK(property_key, idx0, idx1)
-        self.core.SA_SI_SetProperty_i32(self._id, c_uint32(encoded_key), value)
+        self.core.SA_SI_SetProperty_i32(self._id, c_uint32(encoded_key), c_int32(value))
 
     def SetProperty_i64(self, property_key, value, idx0=0, idx1=0):
         """
@@ -3796,7 +3857,7 @@ class Picoscale(model.HwComponent):
         This is not a "normal" referencing procedure since the hardware doesn't have any actuators. Instead,
         it performs an internal adjustment routine which is required to get accurate position values.
         """
-        f = self._createMoveFuture(ref=True)
+        f = self._createReferenceFuture()
         self._executor.submitf(f, self._doReference, f)
         return f
 
@@ -3808,13 +3869,14 @@ class Picoscale(model.HwComponent):
             IOError: if referencing failed due to hardware
             CancelledError if was cancelled
         """
-        try:
-            with future._moving_lock:
-                if future._must_stop:
-                    raise CancelledError()
+        # The position polling thread can continue, it does not seem to interfere with the referencing procedure.
+        with future._moving_lock:
+            try:
                 # Reset reference so that if it fails, it states the axes are not referenced (anymore)
                 self.referenced._value = {a: False for a in self.channels.keys()}
                 logging.debug("Starting referencing.")
+                if future._must_stop:
+                    raise CancelledError()
 
                 # Cannot go immediately to automatic adjustment --> first switch to manual adjustment
                 self.EnableEventNotification(SA_SIDLL.SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT)
@@ -3822,6 +3884,8 @@ class Picoscale(model.HwComponent):
                                      SA_SIDLL.SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST)
                 self.WaitForEvent(SA_SIDLL.SA_PS_ADJUSTMENT_STATE_MANUAL_ADJUST)
 
+                if future._must_stop:
+                    raise CancelledError()
                 # Activate working distance
                 self.SetProperty_i32(SA_SIDLL.SA_PS_SYS_WORKING_DISTANCE_ACTIVATE_PROP,
                                      SA_SIDLL.SA_PS_WORKING_DISTANCE_SHRINK_MODE_LEFT_RIGHT)
@@ -3829,192 +3893,338 @@ class Picoscale(model.HwComponent):
                 # --> wait 1 s for command to be processed
                 time.sleep(1)
 
+                if future._must_stop:
+                    raise CancelledError()
                 # Switch to automatic adjustment
                 self.SetProperty_i32(SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP,
                                      SA_SIDLL.SA_PS_ADJUSTMENT_STATE_AUTO_ADJUST)
                 self.WaitForEvent(SA_SIDLL.SA_PS_ADJUSTMENT_STATE_DISABLED)  # state will be DISABLED when done
                 logging.debug("Finished referencing.")
-        except SA_SIError as ex:
-            # This occurs if a stop command interrupts referencing
-            if ex.errno == SA_SIDLL.SA_SI_ERROR_CANCELLED:
-                logging.info("Referencing stopped: %s", ex)
-                raise CancelledError()
-            elif future._must_stop:
-                raise CancelledError()
-            else:
-                logging.error("Referencing failed: %s", ex)
+
+                # We could save the referencing parameters to memory here. However, it is only possible
+                # to save these parameters together with the configuration parameters (fiber length etc.).
+                # In case something goes wrong, there is a chance that the device needs to be reconfigured.
+                # Since referencing should be done on startup anyway, there is no real need to save the
+                # parameters.
+            except SA_SIError as ex:
+                # This occurs if a stop command interrupts referencing
+                if ex.errno == SA_SIDLL.SA_SI_ERROR_CANCELLED:
+                    future._was_stopped = True
+                    logging.info("Referencing stopped: %s", ex)
+                    raise CancelledError()
+                elif future._must_stop:
+                    future._was_stopped = True
+                    raise CancelledError()
+                else:
+                    logging.error("Referencing failed: %s", ex)
+                    raise
+            except CancelledError:
+                logging.debug("Referencing cancelled.")
+                future._was_stopped = True
+                raise  # No fuss, pass it as-is
+            except Exception:
+                logging.exception("Referencing failure.")
                 raise
-        except CancelledError:
-            logging.debug("Movement canceled")
-            raise  # No fuss, pass it as-is
-        except Exception:
-            logging.exception("Referencing failure")
-            raise
-        finally:
-            self.DisableEventNotification(SA_SIDLL.SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT)
-            # If the state of the device is stable and all channels are valid, the referencing procedure
-            # succeeded. Typically, all channels become valid at the same time during the reference procedure.
-            # We still check all of them inidividually to be sure.
-            if self.IsStable():
+            finally:
+                # If the state of the device is stable and all channels are valid, the referencing procedure
+                # succeeded. Typically, all channels become valid at the same time during the reference procedure.
+                # We still check all of them inidividually to be sure.
+                if self.IsStable():
+                    for ch, num in self.channels.items():
+                        self.referenced._value[ch] = self.IsValid(num)
+                self._updatePosition()
+                # We only notify after updating the position so that when a listener
+                # receives updates both values are already updated.
+                self.referenced.notify(self.referenced.value)
+
+                # The adjustment state should be "disabled" after automatic adjustment. If the referencing
+                # procedure was stopped prematurely, right after it was set to "manual", it might be in the
+                # wrong state --> make sure it's set to disabled here.
+                if self.GetAdjustmentState() != SA_SIDLL.SA_PS_ADJUSTMENT_STATE_DISABLED:
+                    self.SetProperty_i32(SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP,
+                                         SA_SIDLL.SA_PS_ADJUSTMENT_STATE_DISABLED)
+                    self.WaitForEvent(SA_SIDLL.SA_PS_ADJUSTMENT_STATE_DISABLED)  # state will be DISABLED when done
+                self.DisableEventNotification(SA_SIDLL.SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT)
+
+    @isasync
+    def _validate(self):
+        """
+        Short "referencing" procedure. On startup, either referencing or validation needs to be performed.
+        Validation uses the referencing parameters stored in memory. It is in general much faster than
+        referencing. However, it is recommended to do the full referencing procedure on startup for
+        more accurate results.
+        """
+        f = self._createReferenceFuture()
+        self._executor.submitf(f, self._doValidation, f)
+        return f
+
+    def _doValidation(self, future):
+        """
+        Actually runs the validation code.
+        After the device was just turned on, it might take ~5 minutes, otherwise it is very fast.
+        future (Future): the future it handles
+        raise:
+            IOError: if validation failed due to hardware
+            CancelledError if was cancelled
+        """
+        with future._moving_lock:
+            try:
+                self.ValidateChannels()
+                for ch in self.channels.values():
+                    self.EnableChannel(ch)
+            except SA_SIError as ex:
+                # This occurs if a stop command interrupts referencing
+                if ex.errno == SA_SIDLL.SA_SI_ERROR_CANCELLED:
+                    future._was_stopped = True
+                    logging.info("Validation stopped: %s", ex)
+                    raise CancelledError()
+                elif future._must_stop:
+                    future._was_stopped = True
+                    raise CancelledError()
+                else:
+                    logging.error("Validation failed: %s", ex)
+                    raise
+            except CancelledError:
+                logging.debug("Validation cancelled.")
+                future._was_stopped = True
+                raise  # No fuss, pass it as-is
+            except Exception:
+                logging.exception("Validation failure.")
+                raise
+            finally:
+                if not self.IsStable():
+                    raise IOError("Validation failed, device not stable.")
                 for ch, num in self.channels.items():
-                    self.referenced._value[ch] = self.IsValid(num)
-            self._updatePosition()
-            # We only notify after updating the position so that when a listener
-            # receives updates both values are already updated.
-            self.referenced.notify(self.referenced.value)
+                    if not self.IsValid(num):
+                        raise IOError("Failed to validate channel %s" % num)
+                self._updatePosition()
+
+    def _on_referenced(self, future):
+        """
+        Callback function for referencing/validation future in __init__.
+        """
+        try:
+            future.result()
+            self.state._set_value(model.ST_RUNNING, force_write=True)
+        except Exception as e:
+            self.state._set_value(e, force_write=True)
+            logging.exception(e)
 
     def _updatePosition(self):
         """
         Updates the position VA.
         """
-        pos = {}
-        for ch in self.channels.values():
-            pos[ch] = self.GetValue_f64(ch, 0)  # position value is at index 0
-
-        logging.debug("Updated position to %s.", pos)
+        pos = self._getPosition()
         self.position._set_value(pos, force_write=True)
+        logging.debug("Updated position to %s.", pos)
 
-    def _createMoveFuture(self, ref=False):
+    def _getPosition(self):
         """
-        ref: if true, will use a different canceller
-        Return (CancellableFuture): a future that can be used to manage a move
+        Getter for .position VA. Requests position from device.
+        returns: dict (str --> float)
+        """
+        pos = {}
+        for name, num in self.channels.items():
+            pos[name] = self.GetValue_f64(num, 0)  # position value is at index 0
+        return pos
+
+    def _createReferenceFuture(self):
+        """
+        returns: (CancellableFuture)
         """
         f = CancellableFuture()
-        f._moving_lock = threading.Lock()  # taken while moving
         f._must_stop = False  # cancel of the current future requested
-        #f.task_canceller = self._cancelCurrentMove
+        f._was_stopped = False  # future was actually stopped
+        f._moving_lock = threading.Lock()  # taken while moving
+        f.task_canceller = self._cancelReference
         return f
+
+    def _cancelReference(self, future):
+        """
+        Cancels the referencing procedure.
+        future (Future): the future to stop
+        """
+        logging.debug("Cancelling referencing...")
+        future._must_stop = True  # tell the thread taking care of the referencing it's over
+        self.core.SA_SI_Cancel(self._id)
+
+        # Synchronise with the ending of the future
+        with future._moving_lock:
+            if not future._was_stopped:
+                logging.debug("Cancelling failed.")
+            return future._was_stopped
 
 
 class FakePicoscale_DLL(object):
     """
-    Fake MCS2 DLL for simulator
+    Simulated Picoscale DLL.
     """
 
     def __init__(self):
         self.properties = {
-            SA_SIDLL.SA_SI_PKEY_DEVICE_NAME: [0],
-            SA_SIDLL.SA_SI_PKEY_NUMBER_OF_CHANNELS: [3],
-            SA_SIDLL.SA_SI_PKEY_MOVE_MODE: [
-                    SA_SIDLL.SA_SI_MOVE_MODE_CL_ABSOLUTE,
-                    SA_SIDLL.SA_SI_MOVE_MODE_CL_ABSOLUTE,
-                    SA_SIDLL.SA_SI_MOVE_MODE_CL_ABSOLUTE,
-                    ],
-            SA_SIDLL.SA_SI_PKEY_CHANNEL_STATE: [0, 0, 0],
-            SA_SIDLL.SA_SI_PKEY_POSITION: [0, 0, 0],
-            SA_SIDLL.SA_SI_PKEY_HOLD_TIME: [0, 0, 0],
-            SA_SIDLL.SA_SI_PKEY_DEVICE_NAME: [b"Simulated"],
-            SA_SIDLL.SA_SI_PKEY_DEVICE_SERIAL_NUMBER: [b"1234"],
-            SA_SIDLL.SA_SI_PKEY_REFERENCING_OPTIONS: [0, 0, 0],
-            SA_SIDLL.SA_SI_PKEY_CALIBRATION_OPTIONS: [0, 0, 0],
-            SA_SIDLL.SA_SI_PKEY_LOGICAL_SCALE_OFFSET: [0, 0, 0],
-            SA_SIDLL.SA_SI_PKEY_POSITIONER_TYPE_NAME: [b"F4K3", b"F4K3", b"F4K3"],
+            SA_SIDLL.SA_SI_DEVICE_NAME_PROP: b"Simulated Picoscale",
+            SA_SIDLL.SA_SI_DEVICE_SERIAL_NUMBER_PROP: b"1234",
+            SA_SIDLL.SA_PS_SYS_FULL_ACCESS_CONNECTION_PROP: 0,
+            SA_SIDLL.SA_SI_EVENT_NOTIFICATION_ENABLED_PROP: 0,
+            SA_SIDLL.SA_PS_AF_ADJUSTMENT_RESULT_LOAD_PROP: 0,
+            SA_SIDLL.SA_PS_AF_CHANNEL_VALIDATION_STATE_PROP: 0,
+            SA_SIDLL.SA_PS_CH_ENABLED_PROP: 0,
+            SA_SIDLL.SA_PS_SYS_FIBERLENGTH_HEAD_PROP: 1500,
+            SA_SIDLL.SA_PS_SYS_FIBERLENGTH_EXTENSION_PROP: 0,
+            SA_SIDLL.SA_PS_SYS_WORKING_DISTANCE_MAX_PROP: 80,
+            SA_SIDLL.SA_PS_SYS_WORKING_DISTANCE_MIN_PROP: 40,
+            SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP: 0,
+            SA_SIDLL.SA_SI_NUMBER_OF_CHANNELS_PROP: 3,
+            SA_SIDLL.SA_PS_SYS_IS_STABLE_PROP: 1,
+            SA_SIDLL.SA_PS_CH_IS_VALID_PROP: 1,
+            SA_SIDLL.SA_PS_SYS_WORKING_DISTANCE_ACTIVATE_PROP: 0,
         }
 
-        self.target = [0, 0, 0]
+        self.current_event = None
+        self.cancelling = False
+        self.no_events = True
 
-        # Specify ranges
-        self._range = [(-10e12, 10e12), (-10e12, 10e12), (-10e12, 10e12)]
-
-        self.stopping = threading.Event()
-
-        self._current_move_start = time.time()
-        self._current_move_finish = time.time()
-
-    def _pos_in_range(self, ch, pos):
-        return (self._range[ch][0] <= pos <= self._range[0][1])
-
-    """
-    DLL functions (fake)
-    These functions are provided by the real SA_MC DLL
-    """
+        self.event_param = {}
+        self.event_to_property = {
+            SA_SIDLL.SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT: SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP,
+            SA_SIDLL.SA_PS_STABLE_STATE_CHANGED_EVENT: SA_SIDLL.SA_PS_SYS_IS_STABLE_PROP,
+                                  }
+        self.executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
     def SA_SI_Open(self, id, locator, options):
-        logging.debug("sim MCS2: Starting MCS2 Sim")
+        logging.debug("Starting Picoscale Simulator.")
+        return 0
 
     def SA_SI_Close(self, id):
-        logging.debug("sim MCS2: Closing MCS2 Sim")
+        logging.debug("Closing Picoscale Simulator.")
+        return 0
+
+    def SA_SI_Cancel(self, id):
+        logging.debug("Cancelling.")
+        self.cancelling = True
+        print('cancelled')
+
+    def SA_SI_EPK(self, key, idx0=0, idx1=0):
+        return key << 16 | idx0 << 8 | idx1
 
     def SA_SI_GetFullVersionString(self):
         return b"1.2.3.123"
 
-    def SA_SI_SetProperty_f64(self, handle, ch, property_key, value):
-        if not property_key.value in self.properties:
-            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_KEY, "error")
-        self.properties[property_key.value][ch.value] = value.value
+    def SA_SI_WaitForEvent(self, handle, event, timeout):
+        ev = _deref(event, SA_SI_Event)
+        if self.cancelling:
+            ev.error = SA_SIDLL.SA_SI_ERROR_CANCELLED
+        #print(self.event_param, self.current_event)
+        while not self.current_event in self.event_param:
+            time.sleep(0.1)
+        param = self.event_to_property[self.current_event]
+        print(param, self.properties[param], self.current_event)
+        ev.devEventParameter = self.properties[param]
 
-    def SA_SI_SetProperty_i32(self, handle, ch, property_key, value):
-        if not property_key.value in self.properties:
-            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_KEY, "error")
-        self.properties[property_key.value][ch.value] = value.value
-
-    def SA_SI_SetProperty_i64(self, handle, ch, property_key, value):
-        if not property_key.value in self.properties:
-            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_KEY, "error")
-        self.properties[property_key.value][ch.value] = value.value
-
-    def SA_SI_GetProperty_f64(self, handle, ch, property_key, p_val, size):
-        if not property_key.value in self.properties:
-            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_KEY, "error")
-        val = _deref(p_val, c_double)
-        val.value = self.properties[property_key.value][ch.value]
-
-    def SA_SI_GetProperty_i32(self, handle, ch, property_key, p_val, size):
-        if not property_key.value in self.properties:
-            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_KEY, "error")
-
-        # Handle movement states before setting the value
-        if property_key.value == SA_SIDLL.SA_SI_PKEY_CHANNEL_STATE:
-            if self.stopping.is_set():  # stopped before move could complete
-                # set the position to someplace in between
-                self.properties[SA_SIDLL.SA_SI_PKEY_POSITION][ch.value] = int(
-                     (self.target[ch.value] + self.properties[SA_SIDLL.SA_SI_PKEY_POSITION][ch.value]) / 2)
-            elif self._current_move_finish < time.time():  # move is finished
-                self.properties[SA_SIDLL.SA_SI_PKEY_POSITION][ch.value] = \
-                    int(self.target[ch.value])
-                self.properties[SA_SIDLL.SA_SI_PKEY_CHANNEL_STATE][ch.value] &= \
-                    ~ (SA_SIDLL.SA_SI_CH_STATE_BIT_ACTIVELY_MOVING)
-        # update the value of the key
-        val = _deref(p_val, c_int32)
-        val.value = self.properties[property_key.value][ch.value]
-
-    def SA_SI_GetProperty_i64(self, handle, ch, property_key, p_val, size):
-        if not property_key.value in self.properties:
-            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_KEY, "error")
-        val = _deref(p_val, c_int64)
-        val.value = self.properties[property_key.value][ch.value]
-
-    def SA_SI_GetProperty_s(self, handle, ch, property_key, val, ioArraySize):
-        if not property_key.value in self.properties:
-            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_KEY, "error")
-        val.value = self.properties[property_key.value][ch.value]
-
-    def SA_SI_Reference(self, handle, ch, _):
-        logging.debug("sim MCS2: Referencing channel %d", ch.value)
-        self.properties[SA_SIDLL.SA_SI_PKEY_CHANNEL_STATE][ch.value] |= SA_SIDLL.SA_SI_CH_STATE_BIT_IS_REFERENCED
-
-        # Simulating a move to 0 in 5 s
-        self.properties[SA_SIDLL.SA_SI_PKEY_CHANNEL_STATE][ch.value] |= SA_SIDLL.SA_SI_CH_STATE_BIT_ACTIVELY_MOVING
-        self.stopping.clear()
-        self._current_move_finish = time.time() + 5
-        self.target[ch.value] = 0
-
-    def SA_SI_Calibrate(self, handle, ch, _):
-        logging.debug("sim MCS2: Calibrating channel %d", ch.value)
-
-    def SA_SI_Move(self, handle, ch, pos_pm, _):
-        self.stopping.clear()
-        if self._pos_in_range(ch.value, pos_pm.value):
-            self._current_move_finish = time.time() + 1.0
-            if self.properties[SA_SIDLL.SA_SI_PKEY_MOVE_MODE][ch.value] == SA_SIDLL.SA_SI_MOVE_MODE_CL_ABSOLUTE:
-                self.target[ch.value] = pos_pm.value
-                logging.debug("sim MCS2: Abs move channel %d to %d pm" % (ch.value, pos_pm.value))
-            elif self.properties[SA_SIDLL.SA_SI_PKEY_MOVE_MODE][ch.value] == SA_SIDLL.SA_SI_MOVE_MODE_CL_RELATIVE:
-                self.target[ch.value] = pos_pm.value + self.properties[SA_SIDLL.SA_SI_PKEY_POSITION][ch.value]
-                logging.debug("sim MCS2: Rel move channel %d to %d pm" % (ch.value, self.target[ch.value]))
-            self.properties[SA_SIDLL.SA_SI_PKEY_CHANNEL_STATE][ch.value] |= SA_SIDLL.SA_SI_CH_STATE_BIT_ACTIVELY_MOVING
+    def _wait_thread(self, event_type):
+        self.properties[SA_SIDLL.SA_PS_SYS_IS_STABLE_PROP] = 0  # system not stable
+        print('unstable')
+        # Different behaviour for different event types
+        if event_type == SA_SIDLL.SA_PS_STABLE_STATE_CHANGED_EVENT:
+            wait_time = 1  # wait 1 s
+            finished_param = 1  # afterwards, stable (=1)
+        elif event_type == SA_SIDLL.SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT:
+            print('prop %s' % self.properties[SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP])
+            if self.properties[SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP] == SA_SIDLL.SA_PS_ADJUSTMENT_STATE_AUTO_ADJUST:
+                wait_time = 5  # auto adjustment takes a bit longer
+                # after autoadjust, state is set to 0
+                finished_param = 0
+            else:
+                wait_time = 1
+                # otherwise return the state that was requested
+                finished_param = self.properties[SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP]
         else:
-            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_RANGE_LIMIT_REACHED, "error")
+            raise NotImplementedError("Event type %s not implemented in simulator." % event_type)
 
-    def SA_SI_Stop(self, handle, ch, _):
-        self.stopping.set()
+        # Current parameter: different from finished parameter, just invert value
+        print(finished_param, event_type, self.current_event)
+        self.event_param[self.current_event] = 0
+        param = self.event_to_property[self.current_event]
+        self.properties[param] = 0
+        # Wait
+        startt = time.time()
+        while time.time() < startt + wait_time:
+            if self.cancelling:
+                break
+            time.sleep(0.1)
+        print('done looping')
+        # Set parameters
+        if not self.cancelling:
+            self.properties[SA_SIDLL.SA_PS_SYS_IS_STABLE_PROP] = 1  # system stable
+            print('stable')
+            self.event_param[self.current_event] = finished_param
+            param = self.event_to_property[self.current_event]
+            print('finished %s' % finished_param)
+            self.properties[param] = finished_param
+        # Reset flags
+        self.cancelling = False
+        self.no_events = True
+
+    def SA_SI_SetProperty_f64(self, handle, property_key, value):
+        shifted_key = property_key.value >> 16
+        if shifted_key not in self.properties:
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_PARAMETER, "INVALID_PARAMETER")
+        self.properties[shifted_key] = value.value
+
+    def SA_SI_SetProperty_i32(self, handle, property_key, value):
+        shifted_key = property_key.value >> 16
+        if shifted_key not in self.properties:
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_PARAMETER, "INVALID_PARAMETER")
+        print('new prop %s, %s' % (value.value, shifted_key))
+        self.properties[shifted_key] = value.value
+        if shifted_key == SA_SIDLL.SA_SI_EVENT_NOTIFICATION_ENABLED_PROP:
+            event_type = property_key.value & 0xffff
+            self.current_event = event_type
+
+            print('submit')
+            self.executor.submit(self._wait_thread, event_type)
+
+    def SA_SI_SetProperty_i64(self, handle, property_key, value):
+        shifted_key = property_key.value >> 16
+        if shifted_key not in self.properties:
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_PARAMETER, "INVALID_PARAMETER")
+        self.properties[shifted_key] = value.value
+
+    def SA_SI_GetProperty_f64(self, handle, property_key, p_val, size):
+        shifted_key = property_key.value >> 16
+        if shifted_key not in self.properties:
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_PARAMETER, "INVALID_PARAMETER")
+        val = _deref(p_val, c_double)
+        val.value = self.properties[shifted_key]
+
+    def SA_SI_GetProperty_i32(self, handle, property_key, p_val, size):
+        shifted_key = property_key.value >> 16
+        if shifted_key not in self.properties:
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_PARAMETER, "INVALID_PARAMETER")
+        val = _deref(p_val, c_int32)
+        if shifted_key == SA_SIDLL.SA_PS_SYS_IS_STABLE_PROP:
+            print(self.properties[shifted_key])
+        val.value = self.properties[shifted_key]
+
+    def SA_SI_GetProperty_i64(self, handle, property_key, p_val, size):
+        shifted_key = property_key.value >> 16
+        if shifted_key not in self.properties:
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_PARAMETER, "INVALID_PARAMETER")
+        val = _deref(p_val, c_int64)
+        val.value = self.properties[shifted_key]
+
+    def SA_SI_GetProperty_s(self, handle, property_key, val, size):
+        shifted_key = property_key.value >> 16
+        if shifted_key not in self.properties:
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_PARAMETER, "INVALID_PARAMETER")
+        val.value = self.properties[shifted_key]
+
+    def SA_SI_GetValue_f64(self, handle, channel, data_source_idx, val):
+        # Different positions for different channels
+        val = _deref(val, c_double)
+        if channel == 0:
+            val.value = 10e-6
+        elif channel == 1:
+            val.value = 20e-6
+        else:
+            val.value = 30e-6

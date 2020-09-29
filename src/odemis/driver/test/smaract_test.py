@@ -21,6 +21,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
 import os
+from collections import deque
+
 import time
 import unittest
 from odemis.driver import smaract
@@ -500,13 +502,15 @@ if TEST_NOHW:
 
 class TestPicoscale(unittest.TestCase):
     """
-    Tests cases for the SmarAct Picoscale controller
+    Test cases for the SmarAct Picoscale interferometer.
     """
 
     @classmethod
     def setUpClass(cls):
-        print(smaract.Picoscale.scan())
         cls.dev = smaract.Picoscale(**CONFIG_Picoscale)
+        # Wait until initialization is done
+        while cls.dev.state == model.ST_STARTING:
+            time.sleep(0.1)
 
     @classmethod
     def tearDownClass(cls):
@@ -520,7 +524,51 @@ class TestPicoscale(unittest.TestCase):
             self.assertTrue(i)
 
     def test_position(self):
-        pass
+        """
+        Tests whether the position is updated every second.
+        """
+        self.pos_update = False
+
+        def pos_listener(_):
+            self.pos_update = True
+
+        self.dev.position.subscribe(pos_listener)
+        time.sleep(1.1)  # position should be updated every second
+        self.assertTrue(self.pos_update)
+
+        self.dev.position.unsubscribe(pos_listener)
+
+    def test_reference_cancel(self):
+        """
+        Test cancelling at various stages of the referencing procedure.
+        """
+        # f = self.dev.reference()
+        # self.dev.stop()
+        # self.assertTrue(f._was_stopped)
+        #
+        # f = self.dev.reference()
+        # time.sleep(1)
+        # self.dev.stop()
+        # self.assertTrue(f._was_stopped)
+        #
+        # f = self.dev.reference()
+        # time.sleep(5)
+        # self.dev.stop()
+        # self.assertTrue(f._was_stopped)
+        #
+        # # Test queued futures
+        # f1 = self.dev.reference()
+        # f2 = self.dev.reference()
+        # self.dev.stop()
+        # self.assertEqual(self.dev._executor._queue, deque([]))
+
+        # Test f.cancel()
+        f = self.dev.reference()
+        time.sleep(1)
+        f.cancel()
+        self.assertTrue(f._was_stopped)
+        for a, i in self.dev.referenced.value.items():
+            self.assertFalse(i)
 
 
 if __name__ == '__main__':
