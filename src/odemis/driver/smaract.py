@@ -4088,6 +4088,10 @@ class FakePicoscale_DLL(object):
             SA_SIDLL.SA_PS_SYS_WORKING_DISTANCE_ACTIVATE_PROP: 0,
         }
 
+        self.position0 = 10e-6
+        self.position1 = 20e-6
+        self.position2 = 30e-6
+
         self.active_property = None  # property which is requested in WaitForEvent function
         self.cancel_referencing = False  # let referencing thread know about cancellation
         self.cancel_event = False  # let WaitForEvent function know about cancellation
@@ -4186,11 +4190,11 @@ class FakePicoscale_DLL(object):
         # Different positions for different channels
         val = _deref(val, c_double)
         if channel == 0:
-            val.value = 10e-6
+            val.value = self.position0
         elif channel == 1:
-            val.value = 20e-6
+            val.value = self.position1
         else:
-            val.value = 30e-6
+            val.value = self.position2
 
     def _adjustment_thread(self, level):
         # Different behaviour depending on adjustment level

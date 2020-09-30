@@ -2816,7 +2816,8 @@ class DualChannelPositionSensor(model.HwComponent):
 
     Attributes
     ==========
-    .position (VA: str --> float): position in m for each output channel
+    .position (VA: str --> float): position in m for each output channel. If the output channels has multiple
+        input channels, the positions of the input channels will be averaged.
     .rotation (FloatVA): rotation in rad. This rotation is calculated from the channel positions on the
         axis with two channels. It describes the angle of the line between these two positions with
         respect to the horizontal line (in case of two x sensors) or vertical line (in case of two y sensors)
@@ -2851,8 +2852,10 @@ class DualChannelPositionSensor(model.HwComponent):
 
         self.channels = {}
         for out_ch, in_chs in channels.items():
-            # Convert to tuple (of 1 or 2 str), this makes looping through the channels easier
-            in_chs = tuple(in_chs)
+            # Convert to list (of 1 or 2 str), this makes looping through the channels easier
+            if not isinstance(in_chs, list):
+                in_chs = [in_chs]
+
             for in_ch in in_chs:
                 if in_ch not in self.sensor.channels:
                     raise ValueError("Sensor component '%s' does not have channel '%s'" % (self.sensor.name, in_ch,))
@@ -2876,6 +2879,13 @@ class DualChannelPositionSensor(model.HwComponent):
         Calls .stop function of sensor.
         """
         self.sensor.stop()
+
+    def terminate(self):
+        """
+        Calls .terminate function of sensor and unsubscribes from .sensor.position VA.
+        """
+        self.sensor.position.unsubscribe(self._on_sensor_position)
+        self.sensor.terminate()
 
     def _calculate_position_rotation(self, sensor_pos):
         """
