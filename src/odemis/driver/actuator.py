@@ -2836,8 +2836,8 @@ class DualChannelPositionSensor(model.HwComponent):
             .reference and .stop functions.
         channels: (dict str --> str, (str), or (str, str)) mapping of output channels to sensor channels, one output
             channel must be mapped to a single sensor channel and the other one to two sensor channels,
-            e.g. {'x': ('x1', 'x2'), 'y': 'y1'}. The order of the tuple with two channels matters for
-            the calculation of the rotation angle.
+            e.g. {'x': ['x1', 'x2'], 'y': 'y1'}. The order of the elements in the list with two channels matters for
+            the calculation of the rotation angle (in general the left or top sensor should come first).
         distance: distance in m between the sensor heads on the axis with two channels (for calculating the rotation).
         """
         model.HwComponent.__init__(self, name, role, **kwargs)

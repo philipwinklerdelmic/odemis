@@ -542,25 +542,26 @@ class TestPicoscale(unittest.TestCase):
         """
         Test cancelling at various stages of the referencing procedure.
         """
-        # f = self.dev.reference()
-        # self.dev.stop()
-        # self.assertTrue(f._was_stopped)
-        #
-        # f = self.dev.reference()
-        # time.sleep(1)
-        # self.dev.stop()
-        # self.assertTrue(f._was_stopped)
-        #
-        # f = self.dev.reference()
-        # time.sleep(5)
-        # self.dev.stop()
-        # self.assertTrue(f._was_stopped)
-        #
-        # # Test queued futures
-        # f1 = self.dev.reference()
-        # f2 = self.dev.reference()
-        # self.dev.stop()
-        # self.assertEqual(self.dev._executor._queue, deque([]))
+        f = self.dev.reference()
+        time.sleep(0.1)
+        self.dev.stop()
+        self.assertTrue(f._was_stopped)
+
+        f = self.dev.reference()
+        time.sleep(1)
+        self.dev.stop()
+        self.assertTrue(f._was_stopped)
+
+        f = self.dev.reference()
+        time.sleep(5)
+        self.dev.stop()
+        self.assertTrue(f._was_stopped)
+
+        # Test queued futures
+        f1 = self.dev.reference()
+        f2 = self.dev.reference()
+        self.dev.stop()
+        self.assertEqual(self.dev._executor._queue, deque([]))
 
         # Test f.cancel()
         f = self.dev.reference()

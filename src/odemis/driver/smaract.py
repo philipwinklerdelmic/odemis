@@ -3497,6 +3497,12 @@ class Picoscale(model.HwComponent):
             self.SetPrecisionMode(precision_mode)
 
         # State: starting until first referencing/validation procedure is done
+        # Position requests can be made during startup, however, the values are not going to be accurate until the
+        # initialization process is complete. The position thread is polling from the start.
+        # If during startup a call to .reference is made, the referencing future will be added to the
+        # executor and be carried out right after the initialization referencing is done.
+        # In conclusion, no special handling is required during startup, although it does not make much sense
+        # to use the driver until the startup is complete. The position getter will log a warning in this case.
         self.state._set_value(model.ST_STARTING, force_write=True)
 
         # Referencing
@@ -4023,6 +4029,8 @@ class Picoscale(model.HwComponent):
         Getter for .position VA. Requests position from device.
         returns: dict (str --> float)
         """
+        if self.state == model.ST_STARTING:
+            logging.warning("Device has not finished initializing, position request will be inaccurate.")
         pos = {}
         for name, num in self.channels.items():
             pos[name] = self.GetValue_f64(num, 0)  # position value is at index 0
@@ -4080,15 +4088,15 @@ class FakePicoscale_DLL(object):
             SA_SIDLL.SA_PS_SYS_WORKING_DISTANCE_ACTIVATE_PROP: 0,
         }
 
-        self.current_event = None
-        self.cancelling = False
-        self.no_events = True
+        self.active_property = None  # property which is requested in WaitForEvent function
+        self.cancel_referencing = False  # let referencing thread know about cancellation
+        self.cancel_event = False  # let WaitForEvent function know about cancellation
 
-        self.event_param = {}
         self.event_to_property = {
             SA_SIDLL.SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT: SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP,
             SA_SIDLL.SA_PS_STABLE_STATE_CHANGED_EVENT: SA_SIDLL.SA_PS_SYS_IS_STABLE_PROP,
                                   }
+
         self.executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
     def SA_SI_Open(self, id, locator, options):
@@ -4101,8 +4109,8 @@ class FakePicoscale_DLL(object):
 
     def SA_SI_Cancel(self, id):
         logging.debug("Cancelling.")
-        self.cancelling = True
-        print('cancelled')
+        self.cancel_referencing = True
+        self.cancel_event = True
 
     def SA_SI_EPK(self, key, idx0=0, idx1=0):
         return key << 16 | idx0 << 8 | idx1
@@ -4112,58 +4120,11 @@ class FakePicoscale_DLL(object):
 
     def SA_SI_WaitForEvent(self, handle, event, timeout):
         ev = _deref(event, SA_SI_Event)
-        if self.cancelling:
+        if self.cancel_event:
+            self.cancel_event = False
             ev.error = SA_SIDLL.SA_SI_ERROR_CANCELLED
-        #print(self.event_param, self.current_event)
-        while not self.current_event in self.event_param:
-            time.sleep(0.1)
-        param = self.event_to_property[self.current_event]
-        print(param, self.properties[param], self.current_event)
-        ev.devEventParameter = self.properties[param]
-
-    def _wait_thread(self, event_type):
-        self.properties[SA_SIDLL.SA_PS_SYS_IS_STABLE_PROP] = 0  # system not stable
-        print('unstable')
-        # Different behaviour for different event types
-        if event_type == SA_SIDLL.SA_PS_STABLE_STATE_CHANGED_EVENT:
-            wait_time = 1  # wait 1 s
-            finished_param = 1  # afterwards, stable (=1)
-        elif event_type == SA_SIDLL.SA_PS_AF_ADJUSTMENT_PROGRESS_EVENT:
-            print('prop %s' % self.properties[SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP])
-            if self.properties[SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP] == SA_SIDLL.SA_PS_ADJUSTMENT_STATE_AUTO_ADJUST:
-                wait_time = 5  # auto adjustment takes a bit longer
-                # after autoadjust, state is set to 0
-                finished_param = 0
-            else:
-                wait_time = 1
-                # otherwise return the state that was requested
-                finished_param = self.properties[SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP]
-        else:
-            raise NotImplementedError("Event type %s not implemented in simulator." % event_type)
-
-        # Current parameter: different from finished parameter, just invert value
-        print(finished_param, event_type, self.current_event)
-        self.event_param[self.current_event] = 0
-        param = self.event_to_property[self.current_event]
-        self.properties[param] = 0
-        # Wait
-        startt = time.time()
-        while time.time() < startt + wait_time:
-            if self.cancelling:
-                break
-            time.sleep(0.1)
-        print('done looping')
-        # Set parameters
-        if not self.cancelling:
-            self.properties[SA_SIDLL.SA_PS_SYS_IS_STABLE_PROP] = 1  # system stable
-            print('stable')
-            self.event_param[self.current_event] = finished_param
-            param = self.event_to_property[self.current_event]
-            print('finished %s' % finished_param)
-            self.properties[param] = finished_param
-        # Reset flags
-        self.cancelling = False
-        self.no_events = True
+            raise SA_SIError(SA_SIDLL.SA_SI_ERROR_CANCELLED, "CANCELLED")
+        ev.devEventParameter = self.properties[self.active_property]
 
     def SA_SI_SetProperty_f64(self, handle, property_key, value):
         shifted_key = property_key.value >> 16
@@ -4175,14 +4136,18 @@ class FakePicoscale_DLL(object):
         shifted_key = property_key.value >> 16
         if shifted_key not in self.properties:
             raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_PARAMETER, "INVALID_PARAMETER")
-        print('new prop %s, %s' % (value.value, shifted_key))
         self.properties[shifted_key] = value.value
-        if shifted_key == SA_SIDLL.SA_SI_EVENT_NOTIFICATION_ENABLED_PROP:
-            event_type = property_key.value & 0xffff
-            self.current_event = event_type
 
-            print('submit')
-            self.executor.submit(self._wait_thread, event_type)
+        # Change active property (for SA_SI_WaitForEvent function)
+        if shifted_key == SA_SIDLL.SA_SI_EVENT_NOTIFICATION_ENABLED_PROP:
+            event = property_key.value & 0xffff
+            self.active_property = self.event_to_property[event]
+
+        # Create thread for adjustment
+        if shifted_key == SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP:
+            # System not stable while adjusting
+            self.properties[SA_SIDLL.SA_PS_SYS_IS_STABLE_PROP] = 0
+            self.executor.submit(self._adjustment_thread, value.value)
 
     def SA_SI_SetProperty_i64(self, handle, property_key, value):
         shifted_key = property_key.value >> 16
@@ -4202,8 +4167,6 @@ class FakePicoscale_DLL(object):
         if shifted_key not in self.properties:
             raise SA_SIError(SA_SIDLL.SA_SI_ERROR_INVALID_PARAMETER, "INVALID_PARAMETER")
         val = _deref(p_val, c_int32)
-        if shifted_key == SA_SIDLL.SA_PS_SYS_IS_STABLE_PROP:
-            print(self.properties[shifted_key])
         val.value = self.properties[shifted_key]
 
     def SA_SI_GetProperty_i64(self, handle, property_key, p_val, size):
@@ -4228,3 +4191,29 @@ class FakePicoscale_DLL(object):
             val.value = 20e-6
         else:
             val.value = 30e-6
+
+    def _adjustment_thread(self, level):
+        # Different behaviour depending on adjustment level
+        if level == SA_SIDLL.SA_PS_ADJUSTMENT_STATE_AUTO_ADJUST:
+            # after autoadjust, state is set to 0
+            finished_param = 0
+            wait_time = 6  # auto adjustment takes a bit longer
+        else:
+            # otherwise return the state that was requested
+            finished_param = level
+            wait_time = 1
+
+        # Wait
+        startt = time.time()
+        while time.time() < startt + wait_time:
+            if self.cancel_referencing:
+                break
+            time.sleep(0.1)
+
+        # Set parameters
+        if not self.cancel_referencing:
+            self.properties[SA_SIDLL.SA_PS_SYS_IS_STABLE_PROP] = 1  # system stable
+            self.properties[SA_SIDLL.SA_PS_AF_ADJUSTMENT_STATE_PROP] = finished_param
+
+        # Reset cancelling flag
+        self.cancel_referencing = False
