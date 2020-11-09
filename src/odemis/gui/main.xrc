@@ -3665,7 +3665,7 @@
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
                       <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_fastem_calibration">
+                        <object class="CalibrationBarFastEM" name="pnl_fastem_calibration">
                           <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
@@ -3679,7 +3679,7 @@
                         <bg>#555555</bg>
                       </object>
 					  <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_sparc_streams">
+                        <object class="StreamBarFastEM" name="pnl_sparc_streams">
                           <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>

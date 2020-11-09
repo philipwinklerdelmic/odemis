@@ -1245,6 +1245,96 @@ class SparcAcquisitionTab(Tab):
             return None
 
 
+class FastEMAcquisitionTab(Tab):
+    def __init__(self, name, button, panel, main_frame, main_data):
+        tab_data = guimod.FastEMAcquisitionGUIData(main_data)
+        super(FastEMAcquisitionTab, self).__init__(name, button, panel, main_frame, tab_data)
+        self.set_label("ACQUISITION")
+
+        viewports = panel.pnl_sparc_grid.viewports
+        for vp in viewports[:4]:
+            assert(isinstance(vp, (MicroscopeViewport, PlotViewport, TemporalSpectrumViewport)))
+
+        # Connect the views
+        # TODO: make them different depending on the hardware available?
+        #       If so, to what? Does having multiple SEM views help?
+        vpv = collections.OrderedDict([
+            (viewports[0],
+             {"name": "Overview",
+              "cls": guimod.ContentView,  # Center on content (instead of stage)
+              #"stage": main_data.stage,
+              "stream_classes": (EMStream),
+              }),
+        ])
+
+        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+
+        # Create Stream Bar Controller
+        self._stream_controller = streamcont.FastEMStreamsController(
+            tab_data,
+            panel.pnl_sparc_streams,
+            ignore_view=True,  # Show all stream panels, independent of any selected viewport
+            view_ctrl=self.view_controller,
+        )
+        main_data.is_acquiring.subscribe(self.on_acquisition)
+
+        self._calibration_controller = streamcont.FastEMStreamsController(
+            tab_data,
+            panel.pnl_fastem_calibration,
+            ignore_view=True,  # Show all stream panels, independent of any selected viewport
+            view_ctrl=self.view_controller,
+        )
+
+        self._acquisition_controller = acqcont.FastEMAcquiController(
+            tab_data,
+            panel,
+            self._stream_controller
+        )
+
+    @property
+    def streambar_controller(self):
+        return self._stream_controller
+
+    @property
+    def acquisition_controller(self):
+        return self._acquisition_controller
+
+    def on_acquisition(self, is_acquiring):
+        # TODO: Make sure nothing can be modified during acquisition
+
+        self.tb.enable(not is_acquiring)
+        self.panel.vp_sparc_tl.Enable(not is_acquiring)
+        # TODO: Leave the canvas accessible, but only forbid moving the stage and
+        # if the mpp changes, do not update the horizontalFoV of the e-beam.
+        # For now, as a hack, we re-enable the legend to allow changing the merge
+        # ratio between SEM and CL.
+        if is_acquiring:
+            self.panel.vp_sparc_tl.bottom_legend.Enable(True)
+
+        self.panel.btn_sparc_change_file.Enable(not is_acquiring)
+
+    def Show(self, show=True):
+        assert (show != self.IsShown())  # we assume it's only called when changed
+        super(FastEMAcquisitionTab, self).Show(show)
+
+        # pause streams when not displayed
+        if not show:
+            self._stream_controller.pauseStreams()
+
+    def terminate(self):
+        # make sure the streams are stopped
+        for s in self.tab_data_model.streams.value:
+            s.is_active.value = False
+
+    @classmethod
+    def get_display_priority(cls, main_data):
+        # For SPARCs
+        if main_data.role in ("fast-em",):
+            return 1
+        else:
+            return None
+
+
 # Different states of the mirror stage positions
 MIRROR_NOT_REFD = 0
 MIRROR_PARKED = 1

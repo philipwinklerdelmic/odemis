@@ -222,6 +222,65 @@ class StreamBarXmlHandler(xrc.XmlResourceHandler):
             return w
 HANDLER_CLASS_LIST.append(StreamBarXmlHandler)
 
+class StreamBarFastEMXmlHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'StreamBarFastEM')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+
+        if self.GetClass() == 'StreamBarFastEM':
+            parent = self.GetParentAsWindow()
+            w = strm.StreamBar(parent,
+                                 self.GetID(),
+                                 self.GetPosition(),
+                                 self.GetSize(),
+                                 self.GetStyle(),
+                                 add_button=self.GetBool('add_button'))
+            self.SetupWindow(w)
+            # 'Dirty' fix for the hard coded 'add stream' child button
+            if self.GetBool('add_button'):
+                w.btn_add_stream.SetBackgroundColour(w.GetBackgroundColour())
+            parent.add_item(w)
+            return w
+HANDLER_CLASS_LIST.append(StreamBarFastEMXmlHandler)
+
+
+class CalibrationBarFastEMXmlHandler(xrc.XmlResourceHandler):
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'CalibrationBarFastEM')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+
+        if self.GetClass() == 'CalibrationBarFastEM':
+            parent = self.GetParentAsWindow()
+            w = strm.StreamBar(parent,
+                                 self.GetID(),
+                                 self.GetPosition(),
+                                 self.GetSize(),
+                                 self.GetStyle(),
+                                 add_button=self.GetBool('add_button'))
+            self.SetupWindow(w)
+            # 'Dirty' fix for the hard coded 'add stream' child button
+            if self.GetBool('add_button'):
+                w.btn_add_stream.SetBackgroundColour(w.GetBackgroundColour())
+            parent.add_item(w)
+            return w
+HANDLER_CLASS_LIST.append(CalibrationBarFastEMXmlHandler)
+
 
 class _ImageButtonHandler(xrc.XmlResourceHandler):
 

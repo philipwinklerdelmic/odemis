@@ -978,6 +978,27 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         self.polePositionPhysical.notify(posphy)
 
 
+class FastEMAcquisitionGUIData(MicroscopyGUIData):
+    """ Represent an interface used to select a precise area to scan and
+    acquire signal. It allows fine control of the shape and density of the scan.
+    It is specifically made for the SPARC system.
+    """
+
+    def __init__(self, main):
+        assert main.microscope is not None
+        MicroscopyGUIData.__init__(self, main)
+
+
+        # List of streams to be acquired (as the ones used to display the live
+        # view are different)
+        self.acquisitionStreams = set()
+
+        #
+        self.overviewImage = None
+
+
+
+
 class FileInfo(object):
     """
     Represent all the information about a microscope acquisition recorded

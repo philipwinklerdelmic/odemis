@@ -2975,3 +2975,160 @@ class SparcStreamsController(StreamBarController):
         for s in self._tab_data_model.streams.value:
             if model.hasVA(s, "useScanStage"):
                 s.useScanStage.value = use
+
+
+class FastEMStreamsController(StreamBarController):
+    """
+    Controls the streams for the SPARC acquisition tab
+    In addition to the standard controller it:
+     * Knows how to create the special RepeptionStreams
+     * Updates the .acquisitionStreams when a stream is added/removed
+     * Connects tab_data.useScanStage to the streams
+
+    Note: tab_data.spotStream should be in tab_data.streams
+    """
+
+    def __init__(self, tab_data, *args, **kwargs):
+        super(FastEMStreamsController, self).__init__(tab_data, *args, **kwargs)
+
+        # Each stream will be created both as a SettingsStream and a MDStream
+        # When the SettingsStream is deleted, automatically remove the MDStream
+        tab_data.streams.subscribe(self._on_streams)
+
+
+    def _createAddStreamActions(self):
+        """ Create the compatible "add stream" actions according to the current microscope.
+
+        To be executed only once, at initialisation.
+        """
+        main_data = self._main_data_model
+
+        self.add_action("New ROI", self._addROI)
+
+
+
+    def _on_streams(self, streams):
+        """ Remove MD streams from the acquisition view that have one or more sub streams missing
+        Also remove the ROI subscriptions and wx events.
+
+        Args:
+            streams (list of streams): The streams currently used in this tab
+        """
+        semcls = self._tab_data_model.semStream
+
+        # Clean-up the acquisition streams
+        for acqs in self._tab_data_model.acquisitionStreams.copy():
+            if not isinstance(acqs, acqstream.MultipleDetectorStream):
+                if acqs not in streams:
+                    logging.debug("Removing stream %s from acquisition too",
+                                  acqs.name.value)
+                    self._tab_data_model.acquisitionStreams.discard(acqs)
+            else:
+                # Are all the sub streams of the MDStreams still there?
+                for ss in acqs.streams:
+                    # If not, remove the MD stream
+                    if ss is not semcls and ss not in streams:
+                        if isinstance(ss, acqstream.SEMStream):
+                            logging.warning("Removing stream because %s is gone!", ss)
+                        logging.debug("Removing acquisition stream %s because %s is gone",
+                                      acqs.name.value, ss.name.value)
+                        self._tab_data_model.acquisitionStreams.discard(acqs)
+                        break
+
+    def _getAffectingSpectrograph(self, comp):
+        """
+        Find which spectrograph matters for the given component (ex, spectrometer)
+        comp (Component): the hardware which is affected by a spectrograph
+        return (None or Component): the spectrograph affecting the component
+        """
+        cname = comp.name
+        main_data = self._main_data_model
+        for spg in (main_data.spectrograph, main_data.spectrograph_ded):
+            if spg is not None and cname in spg.affects.value:
+                return spg
+        else:
+            logging.warning("No spectrograph found affecting component %s", cname)
+            # spg should be None, but in case it's an error in the microscope file
+            # and actually, there is a spectrograph, then use that one
+            return main_data.spectrograph
+
+    def _addROI(self, name, detector, **kwargs):
+
+        # Only put some local VAs, the rest should be global on the SE stream
+        emtvas = get_local_vas(self._main_data_model.ebeam, self._main_data_model.hw_settings_config)
+        emtvas &= {"resolution", "dwellTime", "scale"}
+
+        s = acqstream.SEMStream(
+            name,
+            detector,
+            detector.data,
+            self._main_data_model.ebeam,
+            focuser=self._main_data_model.ebeam_focus,
+            emtvas=emtvas,
+            detvas=get_local_vas(detector, self._main_data_model.hw_settings_config),
+        )
+
+        # If the detector already handles brightness and contrast, don't do it by default
+        # TODO: check if it has .applyAutoContrast() instead (once it's possible)
+        if (s.intensityRange.range == ((0, 0), (255, 255)) and
+                model.hasVA(detector, "contrast") and
+                model.hasVA(detector, "brightness")):
+            s.auto_bc.value = False
+            s.intensityRange.value = (0, 255)
+
+        # add the stream to the acquisition set
+        self._tab_data_model.acquisitionStreams.add(s)
+
+        return self._add_stream(s, **kwargs)
+
+    def _filter_axes(self, axes):
+        """
+        Given an axes dict from config, filter out the axes which are not
+          available on the current hardware.
+        axes (dict str -> (str, Actuator or None)): VA name -> axis+Actuator
+        returns (dict): the filtered axes
+        """
+        return {va_name: (axis_name, comp)
+                for va_name, (axis_name, comp) in axes.items()
+                if comp and axis_name in comp.axes}
+
+    def _set_default_spectrum_axes(self, stream):
+        """
+        Try to guess good default values for a spectrum stream's axes
+        """
+        if hasattr(stream, "axisGrating") and hasattr(stream.axisGrating, "choices"):
+            # Anything *but* mirror is fine
+            choices = stream.axisGrating.choices
+
+            # Locate the mirror entry
+            mirror = None
+            if isinstance(choices, dict):
+                for pos, desc in choices.items():
+                    if "mirror" in desc.lower():  # poor's man definition of a mirror
+                        mirror = pos
+                        break
+
+            if mirror is not None and stream.axisGrating.value == mirror:
+                # Pick the first entry which is not a mirror
+                for pos in choices:
+                    if pos != mirror:
+                        stream.axisGrating.value = pos
+                        logging.debug("Picking grating %d for spectrum stream", pos)
+                        break
+
+        if hasattr(stream, "axisWavelength"):
+            # Wavelength should be > 0
+            if stream.axisWavelength.value == 0:
+                # 600 nm ought to be good for every stream...
+                # TODO: pick based on the grating's blaze
+                stream.axisWavelength.value = stream.axisWavelength.clip(600e-9)
+
+        if hasattr(stream, "axisFilter") and hasattr(stream.axisFilter, "choices"):
+            # Use pass-through if available
+            choices = stream.axisFilter.choices
+            if isinstance(choices, dict):
+                for pos, desc in choices.items():
+                    if desc == "pass-through":  # that's an official constant
+                        stream.axisFilter.value = pos
+                        logging.debug("Picking pass-through filter (%d) for spectrum stream", pos)
+                        break
