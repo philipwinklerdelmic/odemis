@@ -4346,7 +4346,19 @@ def __init_resources():
                     <object class="FoldPanelBar" name="fpb_settings">
                       <object class="FoldPanelItem">
                         <object class="CalibrationBarFastEM" name="pnl_fastem_calibration">
-                          <size>300,-1</size>
+						  
+						  
+						  <object class="wxGridBagSizer">
+						    <object class="sizeritem">
+							<label>A</label>
+							<add_button>?</add_button>
+							</object>
+						  
+						  
+						  
+						   </object>
+                          
+						  <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>

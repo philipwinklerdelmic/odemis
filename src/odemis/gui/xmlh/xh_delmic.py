@@ -222,6 +222,7 @@ class StreamBarXmlHandler(xrc.XmlResourceHandler):
             return w
 HANDLER_CLASS_LIST.append(StreamBarXmlHandler)
 
+
 class StreamBarFastEMXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
@@ -237,7 +238,7 @@ class StreamBarFastEMXmlHandler(xrc.XmlResourceHandler):
 
         if self.GetClass() == 'StreamBarFastEM':
             parent = self.GetParentAsWindow()
-            w = strm.StreamBar(parent,
+            w = strm.StreamBarFastEM(parent,
                                  self.GetID(),
                                  self.GetPosition(),
                                  self.GetSize(),
@@ -267,12 +268,12 @@ class CalibrationBarFastEMXmlHandler(xrc.XmlResourceHandler):
 
         if self.GetClass() == 'CalibrationBarFastEM':
             parent = self.GetParentAsWindow()
-            w = strm.StreamBar(parent,
-                                 self.GetID(),
-                                 self.GetPosition(),
-                                 self.GetSize(),
-                                 self.GetStyle(),
-                                 add_button=self.GetBool('add_button'))
+            w = strm.CalibrationBarFastEM(parent,
+                                          self.GetID(),
+                                          self.GetPosition(),
+                                          self.GetSize(),
+                                          self.GetStyle(),
+                                          add_button=self.GetBool('add_button'))
             self.SetupWindow(w)
             # 'Dirty' fix for the hard coded 'add stream' child button
             if self.GetBool('add_button'):

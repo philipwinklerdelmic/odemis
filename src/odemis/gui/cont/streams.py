@@ -2995,6 +2995,11 @@ class FastEMStreamsController(StreamBarController):
         # When the SettingsStream is deleted, automatically remove the MDStream
         tab_data.streams.subscribe(self._on_streams)
 
+        self._addROI("sem", self._main_data_model.sed)
+
+    def add_action(self, title, callback, check_enabled=None):
+        pass
+
 
     def _createAddStreamActions(self):
         """ Create the compatible "add stream" actions according to the current microscope.

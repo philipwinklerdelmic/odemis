@@ -1494,7 +1494,7 @@ class StreamBar(wx.Panel):
         self.txt_no_stream.Show(self.is_empty())
 
 
-class StreamBarFastEM(wx.Panel):
+class StreamBarFastEM(StreamBar):
     """
     The whole panel containing stream panels and a button to add more streams
     There are multiple levels of visibility of a stream panel:
@@ -1539,10 +1539,6 @@ class StreamBarFastEM(wx.Panel):
 
         self._sz = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self._sz)
-
-        msg = "No streams available."
-        self.txt_no_stream = wx.StaticText(self, -1, msg)
-        self._sz.Add(self.txt_no_stream, 0, wx.ALL | wx.ALIGN_CENTER, 10)
 
         self.btn_add_stream = buttons.PopupImageButton(
             self, -1,
@@ -1553,7 +1549,10 @@ class StreamBarFastEM(wx.Panel):
         self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=10)
         self.btn_add_stream.Show(add_btn)
 
+        self.txt_no_stream = wx.StaticText(self, -1, "")
         self.fit_streams()
+
+
 
     def fit_streams(self):
         # When the whole window/app is destroyed, each widget receives a destroy
@@ -1704,10 +1703,11 @@ class StreamBarFastEM(wx.Panel):
         """ Display a warning text when no streams are present, or show it
         otherwise.
         """
-        self.txt_no_stream.Show(self.is_empty())
+        pass
+        #self.txt_no_stream.Show(self.is_empty())
 
 
-class CalibrationBarFastEM(wx.Panel):
+class CalibrationBarFastEM(StreamBar):
     """
     The whole panel containing stream panels and a button to add more streams
     There are multiple levels of visibility of a stream panel:
@@ -1753,19 +1753,36 @@ class CalibrationBarFastEM(wx.Panel):
         self._sz = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self._sz)
 
-        msg = "No streams available."
-        self.txt_no_stream = wx.StaticText(self, -1, msg)
-        self._sz.Add(self.txt_no_stream, 0, wx.ALL | wx.ALIGN_CENTER, 10)
+        # Calibration Grid
+        calgrid_sz = wx.GridBagSizer(3, 3)
+        for i, lbl in enumerate(["A", "B", "C", "D", "E", "F", "G", "H", "I"]):
+            subsz = wx.BoxSizer(wx.HORIZONTAL)
+            txt = wx.StaticText(self, wx.ALL | wx.ALIGN_CENTER, lbl)
+            subsz.Add(txt)
+            subsz.AddSpacer(10)
+            btn = wx.Button(self, label="?", size=(30, 30))
+            btn.SetBackgroundColour("#999999")
+            subsz.Add(btn)
+            subsz.AddSpacer(40)
+            calgrid_sz.Add(subsz, pos=(i // 3, i % 3))
 
-        self.btn_add_stream = buttons.PopupImageButton(
-            self, -1,
-            label="ADD FILE",
-            style=wx.ALIGN_CENTER
-        )
-        self.btn_add_stream.SetForegroundColour("#999999")
-        self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=10)
-        self.btn_add_stream.Show(add_btn)
+        self._sz.Add(calgrid_sz, 0, wx.ALL | wx.ALIGN_CENTER, 10)
 
+        # Filename
+        fnsz = subsz = wx.BoxSizer(wx.HORIZONTAL)
+        fnsz.AddSpacer(10)
+        fnsz.Add(wx.StaticText(self, wx.ALL | wx.ALIGN_CENTER, "Filename"))
+        fnsz.AddSpacer(10)
+        fnsz.Add(wx.TextCtrl(self, wx.ALL | wx.ALIGN_CENTER, "Select a destination file"))
+        fnsz.AddSpacer(150)
+        btn = ImageTextButton(self, height=24, label="change...")
+        fnsz.AddSpacer(10)
+        fnsz.Add(btn)
+
+        self._sz.AddSpacer(20)
+        self._sz.Add(fnsz)
+        self._sz.AddSpacer(10)
+        self.txt_no_stream = wx.StaticText(self, -1, "")
         self.fit_streams()
 
     def fit_streams(self):
@@ -1917,4 +1934,5 @@ class CalibrationBarFastEM(wx.Panel):
         """ Display a warning text when no streams are present, or show it
         otherwise.
         """
-        self.txt_no_stream.Show(self.is_empty())
+        pass
+        #self.txt_no_stream.Show(self.is_empty())
