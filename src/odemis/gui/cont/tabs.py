@@ -1270,15 +1270,15 @@ class FastEMAcquisitionTab(Tab):
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
         # Create Stream Bar Controller
-        self._stream_controller = streamcont.FastEMStreamsController(
+        self._stream_controller = streamcont.FastEMProjectController(
             tab_data,
-            panel.pnl_sparc_streams,
+            panel.pnl_fastem_projects,
             ignore_view=True,  # Show all stream panels, independent of any selected viewport
             view_ctrl=self.view_controller,
         )
         main_data.is_acquiring.subscribe(self.on_acquisition)
 
-        self._calibration_controller = streamcont.FastEMStreamsController(
+        self._calibration_controller = streamcont.FastEMCalibrationController(
             tab_data,
             panel.pnl_fastem_calibration,
             ignore_view=True,  # Show all stream panels, independent of any selected viewport

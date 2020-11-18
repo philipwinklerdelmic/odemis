@@ -37,7 +37,7 @@ from odemis.acq.stream import MeanSpectrumProjection
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, \
     CONTROL_COMBO, CONTROL_FLT, FG_COLOUR_MAIN, BG_COLOUR_MAIN
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
-from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, \
+from odemis.gui.comp.stream import StreamPanel, FastEMProjectPanel, EVT_STREAM_VISIBLE, \
     EVT_STREAM_PEAK, OPT_BTN_REMOVE, OPT_BTN_SHOW, OPT_BTN_UPDATE, OPT_BTN_TINT, \
     OPT_NAME_EDIT, OPT_BTN_PEAK
 from odemis.gui.conf import data
@@ -2977,7 +2977,7 @@ class SparcStreamsController(StreamBarController):
                 s.useScanStage.value = use
 
 
-class FastEMStreamsController(StreamBarController):
+class FastEMProjectController(StreamBarController):
     """
     Controls the streams for the SPARC acquisition tab
     In addition to the standard controller it:
@@ -2988,18 +2988,15 @@ class FastEMStreamsController(StreamBarController):
     Note: tab_data.spotStream should be in tab_data.streams
     """
 
-    def __init__(self, tab_data, *args, **kwargs):
-        super(FastEMStreamsController, self).__init__(tab_data, *args, **kwargs)
-
-        # Each stream will be created both as a SettingsStream and a MDStream
-        # When the SettingsStream is deleted, automatically remove the MDStream
-        tab_data.streams.subscribe(self._on_streams)
-
-        self._addROI("sem", self._main_data_model.sed)
+    def __init__(self, tab_data, project_bar, *args, **kwargs):
+        #super(FastEMProjectController, self).__init__(tab_data, *args, **kwargs)
+        self._tab_data_model = tab_data
+        self._main_data_model = tab_data.main
+        self._project_bar = project_bar
+        self._addProject("Project 1")
 
     def add_action(self, title, callback, check_enabled=None):
         pass
-
 
     def _createAddStreamActions(self):
         """ Create the compatible "add stream" actions according to the current microscope.
@@ -3007,133 +3004,78 @@ class FastEMStreamsController(StreamBarController):
         To be executed only once, at initialisation.
         """
         main_data = self._main_data_model
+        #self.add_action("New Project", self._addProject)
 
-        self.add_action("New ROI", self._addROI)
+        self.Bind(wx.EVT_BUTTON, self._on_add_project, self._project_bar.btn_add_project)
 
+    def add_action(self, title, callback, check_enabled=None):
+        """ Add an action to the stream menu
 
+        It's added at the end of the list. If an action with the same title exists, it is replaced.
 
-    def _on_streams(self, streams):
-        """ Remove MD streams from the acquisition view that have one or more sub streams missing
-        Also remove the ROI subscriptions and wx events.
+        :param title: (string) Text displayed in the menu
+        :param callback: (callable) function to call when the action is selected
 
-        Args:
-            streams (list of streams): The streams currently used in this tab
         """
-        semcls = self._tab_data_model.semStream
 
-        # Clean-up the acquisition streams
-        for acqs in self._tab_data_model.acquisitionStreams.copy():
-            if not isinstance(acqs, acqstream.MultipleDetectorStream):
-                if acqs not in streams:
-                    logging.debug("Removing stream %s from acquisition too",
-                                  acqs.name.value)
-                    self._tab_data_model.acquisitionStreams.discard(acqs)
-            else:
-                # Are all the sub streams of the MDStreams still there?
-                for ss in acqs.streams:
-                    # If not, remove the MD stream
-                    if ss is not semcls and ss not in streams:
-                        if isinstance(ss, acqstream.SEMStream):
-                            logging.warning("Removing stream because %s is gone!", ss)
-                        logging.debug("Removing acquisition stream %s because %s is gone",
-                                      acqs.name.value, ss.name.value)
-                        self._tab_data_model.acquisitionStreams.discard(acqs)
-                        break
-
-    def _getAffectingSpectrograph(self, comp):
-        """
-        Find which spectrograph matters for the given component (ex, spectrometer)
-        comp (Component): the hardware which is affected by a spectrograph
-        return (None or Component): the spectrograph affecting the component
-        """
-        cname = comp.name
-        main_data = self._main_data_model
-        for spg in (main_data.spectrograph, main_data.spectrograph_ded):
-            if spg is not None and cname in spg.affects.value:
-                return spg
+        if self._stream_bar.btn_add_stream is None:
+            logging.error("No add button present!")
         else:
-            logging.warning("No spectrograph found affecting component %s", cname)
-            # spg should be None, but in case it's an error in the microscope file
-            # and actually, there is a spectrograph, then use that one
-            return main_data.spectrograph
+            logging.debug("Adding %s action to stream panel", title)
+            self.menu_actions[title] = callback
+            self._stream_bar.btn_add_stream.add_choice(title, callback, check_enabled)
 
-    def _addROI(self, name, detector, **kwargs):
+    def _on_add_project(self):
+        self._addProject("Project 1")
 
-        # Only put some local VAs, the rest should be global on the SE stream
-        emtvas = get_local_vas(self._main_data_model.ebeam, self._main_data_model.hw_settings_config)
-        emtvas &= {"resolution", "dwellTime", "scale"}
-
-        s = acqstream.SEMStream(
-            name,
-            detector,
-            detector.data,
-            self._main_data_model.ebeam,
-            focuser=self._main_data_model.ebeam_focus,
-            emtvas=emtvas,
-            detvas=get_local_vas(detector, self._main_data_model.hw_settings_config),
-        )
-
-        # If the detector already handles brightness and contrast, don't do it by default
-        # TODO: check if it has .applyAutoContrast() instead (once it's possible)
-        if (s.intensityRange.range == ((0, 0), (255, 255)) and
-                model.hasVA(detector, "contrast") and
-                model.hasVA(detector, "brightness")):
-            s.auto_bc.value = False
-            s.intensityRange.value = (0, 255)
+    def _addProject(self, name):
+        name = "Project %s" % (len(self._tab_data_model.projects) + 1)
+        p = FastEMProject(name, self._project_bar)
 
         # add the stream to the acquisition set
-        self._tab_data_model.acquisitionStreams.add(s)
+        #self._tab_data_model.projects.insert(p)
+        #
+        # if visible:
+        #     linked_view = None
+        #     if self.ignore_view:  # Always show the stream panel
+        #         show_panel = True
+        #         if not isinstance(add_to_view, bool):
+        #             linked_view = v
+        #     elif self.locked_mode:  # (and don't ignore_view)
+        #         # Show the stream panel iif the view is showing the stream
+        #         show_panel = stream in fview.getStreams()
+        #     else:  # (standard = not locked and don't ignore_view)
+        #         # Show the stream panel iif the view could display the stream
+        #         show_panel = isinstance(stream, fview.stream_classes)
+        #
+        #     stream_cont = self._add_stream_cont(stream,
+        #                                         show_panel,
+        #                                         locked=self.locked_mode,
+        #                                         static=self.static_mode,
+        #                                         view=linked_view,
+        #                                         )
+        #     return stream_cont
+        # return self._add_stream(s, **kwargs)
 
-        return self._add_stream(s, **kwargs)
 
-    def _filter_axes(self, axes):
-        """
-        Given an axes dict from config, filter out the axes which are not
-          available on the current hardware.
-        axes (dict str -> (str, Actuator or None)): VA name -> axis+Actuator
-        returns (dict): the filtered axes
-        """
-        return {va_name: (axis_name, comp)
-                for va_name, (axis_name, comp) in axes.items()
-                if comp and axis_name in comp.axes}
+class FastEMCalibrationController(StreamBarController):
+    """
+    Controls the streams for the SPARC acquisition tab
+    In addition to the standard controller it:
+     * Knows how to create the special RepeptionStreams
+     * Updates the .acquisitionStreams when a stream is added/removed
+     * Connects tab_data.useScanStage to the streams
 
-    def _set_default_spectrum_axes(self, stream):
-        """
-        Try to guess good default values for a spectrum stream's axes
-        """
-        if hasattr(stream, "axisGrating") and hasattr(stream.axisGrating, "choices"):
-            # Anything *but* mirror is fine
-            choices = stream.axisGrating.choices
+    Note: tab_data.spotStream should be in tab_data.streams
+    """
 
-            # Locate the mirror entry
-            mirror = None
-            if isinstance(choices, dict):
-                for pos, desc in choices.items():
-                    if "mirror" in desc.lower():  # poor's man definition of a mirror
-                        mirror = pos
-                        break
+    def __init__(self, tab_data, project_bar, *args, **kwargs):
+        pass
 
-            if mirror is not None and stream.axisGrating.value == mirror:
-                # Pick the first entry which is not a mirror
-                for pos in choices:
-                    if pos != mirror:
-                        stream.axisGrating.value = pos
-                        logging.debug("Picking grating %d for spectrum stream", pos)
-                        break
 
-        if hasattr(stream, "axisWavelength"):
-            # Wavelength should be > 0
-            if stream.axisWavelength.value == 0:
-                # 600 nm ought to be good for every stream...
-                # TODO: pick based on the grating's blaze
-                stream.axisWavelength.value = stream.axisWavelength.clip(600e-9)
-
-        if hasattr(stream, "axisFilter") and hasattr(stream.axisFilter, "choices"):
-            # Use pass-through if available
-            choices = stream.axisFilter.choices
-            if isinstance(choices, dict):
-                for pos, desc in choices.items():
-                    if desc == "pass-through":  # that's an official constant
-                        stream.axisFilter.value = pos
-                        logging.debug("Picking pass-through filter (%d) for spectrum stream", pos)
-                        break
+class FastEMProject(object):
+    def __init__(self, name, project_bar):
+        self.name = model.StringVA(name)
+        self.rois = None#ListVA()
+        ppanel = FastEMProjectPanel(project_bar, self)
+        project_bar.add_project_panel(ppanel)

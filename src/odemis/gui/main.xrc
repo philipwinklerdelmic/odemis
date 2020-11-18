@@ -3665,7 +3665,7 @@
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
                       <object class="FoldPanelItem">
-                        <object class="CalibrationBarFastEM" name="pnl_fastem_calibration">
+                        <object class="FastEMCalibrationBar" name="pnl_fastem_calibration">
 						  <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
@@ -3674,12 +3674,12 @@
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <label>Calibration</label>
+                        <label>CALIBRATION</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
 					  <object class="FoldPanelItem">
-                        <object class="StreamBarFastEM" name="pnl_sparc_streams">
+                        <object class="FastEMProjectBar" name="pnl_fastem_projects">
                           <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
@@ -3688,7 +3688,7 @@
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <label>ROIs</label>
+                        <label>PROJECTS</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>

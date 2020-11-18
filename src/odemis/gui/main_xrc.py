@@ -444,7 +444,7 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
         self.pnl_fastem_calibration = xrc.XRCCTRL(self, "pnl_fastem_calibration")
-        self.pnl_sparc_streams = xrc.XRCCTRL(self, "pnl_sparc_streams")
+        self.pnl_fastem_projects = xrc.XRCCTRL(self, "pnl_fastem_projects")
         self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
         self.btn_sparc_change_file = xrc.XRCCTRL(self, "btn_sparc_change_file")
         self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
@@ -4345,19 +4345,7 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
                       <object class="FoldPanelItem">
-                        <object class="CalibrationBarFastEM" name="pnl_fastem_calibration">
-						  
-						  
-						  <object class="wxGridBagSizer">
-						    <object class="sizeritem">
-							<label>A</label>
-							<add_button>?</add_button>
-							</object>
-						  
-						  
-						  
-						   </object>
-                          
+                        <object class="FastEMCalibrationBar" name="pnl_fastem_calibration">
 						  <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
@@ -4366,12 +4354,12 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <label>Calibration</label>
+                        <label>CALIBRATION</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
 					  <object class="FoldPanelItem">
-                        <object class="StreamBarFastEM" name="pnl_sparc_streams">
+                        <object class="FastEMProjectBar" name="pnl_fastem_projects">
                           <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
@@ -4380,7 +4368,7 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <label>ROIs</label>
+                        <label>PROJECTS</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>

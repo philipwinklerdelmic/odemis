@@ -223,7 +223,7 @@ class StreamBarXmlHandler(xrc.XmlResourceHandler):
 HANDLER_CLASS_LIST.append(StreamBarXmlHandler)
 
 
-class StreamBarFastEMXmlHandler(xrc.XmlResourceHandler):
+class FastEMProjectBarXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Standard styles
@@ -231,29 +231,29 @@ class StreamBarFastEMXmlHandler(xrc.XmlResourceHandler):
         # Custom styles
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, 'StreamBarFastEM')
+        return self.IsOfClass(node, 'FastEMProjectBar')
 
     # Process XML parameters and create the object
     def DoCreateResource(self):
 
-        if self.GetClass() == 'StreamBarFastEM':
+        if self.GetClass() == 'FastEMProjectBar':
             parent = self.GetParentAsWindow()
-            w = strm.StreamBarFastEM(parent,
-                                 self.GetID(),
-                                 self.GetPosition(),
-                                 self.GetSize(),
-                                 self.GetStyle(),
-                                 add_button=self.GetBool('add_button'))
+            w = strm.FastEMProjectBar(parent,
+                                      self.GetID(),
+                                      self.GetPosition(),
+                                      self.GetSize(),
+                                      self.GetStyle(),
+                                      add_button=self.GetBool('add_button'))
             self.SetupWindow(w)
             # 'Dirty' fix for the hard coded 'add stream' child button
             if self.GetBool('add_button'):
-                w.btn_add_stream.SetBackgroundColour(w.GetBackgroundColour())
+                w.btn_add_project.SetBackgroundColour(w.GetBackgroundColour())
             parent.add_item(w)
             return w
-HANDLER_CLASS_LIST.append(StreamBarFastEMXmlHandler)
+HANDLER_CLASS_LIST.append(FastEMProjectBarXmlHandler)
 
 
-class CalibrationBarFastEMXmlHandler(xrc.XmlResourceHandler):
+class FastEMCalibrationBarXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Standard styles
@@ -261,14 +261,14 @@ class CalibrationBarFastEMXmlHandler(xrc.XmlResourceHandler):
         # Custom styles
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, 'CalibrationBarFastEM')
+        return self.IsOfClass(node, 'FastEMCalibrationBar')
 
     # Process XML parameters and create the object
     def DoCreateResource(self):
 
-        if self.GetClass() == 'CalibrationBarFastEM':
+        if self.GetClass() == 'FastEMCalibrationBar':
             parent = self.GetParentAsWindow()
-            w = strm.CalibrationBarFastEM(parent,
+            w = strm.FastEMCalibrationBar(parent,
                                           self.GetID(),
                                           self.GetPosition(),
                                           self.GetSize(),
@@ -280,7 +280,7 @@ class CalibrationBarFastEMXmlHandler(xrc.XmlResourceHandler):
                 w.btn_add_stream.SetBackgroundColour(w.GetBackgroundColour())
             parent.add_item(w)
             return w
-HANDLER_CLASS_LIST.append(CalibrationBarFastEMXmlHandler)
+HANDLER_CLASS_LIST.append(FastEMCalibrationBarXmlHandler)
 
 
 class _ImageButtonHandler(xrc.XmlResourceHandler):
