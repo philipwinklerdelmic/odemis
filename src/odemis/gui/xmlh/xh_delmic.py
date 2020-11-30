@@ -632,6 +632,14 @@ class TemporalSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
 
 HANDLER_CLASS_LIST.append(TemporalSpectrumViewportXmlHandler)
 
+class FastEMAcquisitionViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.FastEMAcquisitionViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "FastEMAcquisitionViewport")
+HANDLER_CLASS_LIST.append(FastEMAcquisitionViewportXmlHandler)
+
 
 ##################################
 # Sliders

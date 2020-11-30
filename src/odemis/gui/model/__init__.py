@@ -998,7 +998,7 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
         self.semStream = None
 
         self.calibrationStreams = {}
-        self.projects = {}
+        self.projects = []
 
 
 class FileInfo(object):

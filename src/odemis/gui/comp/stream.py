@@ -51,6 +51,10 @@ stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
 stream_visible_event, EVT_STREAM_VISIBLE = wx.lib.newevent.NewEvent()
 stream_peak_event, EVT_STREAM_PEAK = wx.lib.newevent.NewEvent()
 
+new_roi_event, EVT_NEW_ROI = wx.lib.newevent.NewEvent()
+project_remove_event, EVT_PROJECT_REMOVE = wx.lib.newevent.NewEvent()
+roi_remove_event, EVT_ROI_REMOVE = wx.lib.newevent.NewEvent()
+
 # Values to control which option is available
 OPT_NAME_EDIT = 1  # allow the renaming of the stream (for one time only)
 OPT_BTN_REMOVE = 2  # remove the stream entry
@@ -402,85 +406,6 @@ class StreamPanelHeader(wx.Control):
         self.ctrl_label.SetFocus()
         if self.Parent.options & OPT_NAME_EDIT:
             self.ctrl_label.SelectAll()
-
-
-class FastEMProjectPanelHeader(StreamPanelHeader):
-
-    def __init__(self, parent, wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
-                 style=wx.NO_BORDER):
-        assert (isinstance(parent, FastEMProjectPanel))
-        super(StreamPanelHeader, self).__init__(parent, wid, pos, size, style)
-
-        self.SetBackgroundColour(self.Parent.BackgroundColour)
-
-        # This style enables us to draw the background with our own paint event handler
-        self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-
-        # Callback when the label changes: (string (text) -> None)
-        self.label_change_callback = None
-
-        # Create and add sizer and populate with controls
-        self._sz = wx.BoxSizer(wx.HORIZONTAL)
-
-        # Fold indicator icon, drawn directly in the background in a fixed position
-        self._foldIcons = wx.ImageList(16, 16)
-        self._foldIcons.Add(img.getBitmap("icon/arr_down_s.png"))
-        self._foldIcons.Add(img.getBitmap("icon/arr_right_s.png"))
-
-        # Add the needed controls to the sizer
-        self.btn_remove = self._add_remove_btn() if self.Parent.options & OPT_BTN_REMOVE else None
-        if self.Parent.options & OPT_NAME_EDIT:
-            self.ctrl_label = self._add_suggest_ctrl()
-        else:
-            self.ctrl_label = self._add_label_ctrl()
-        self.btn_peak = self._add_peak_btn() if self.Parent.options & OPT_BTN_PEAK else None
-        self.btn_tint = self._add_tint_btn() if self.Parent.options & OPT_BTN_TINT else None
-        self.btn_show = self._add_visibility_btn() if self.Parent.options & OPT_BTN_SHOW else None
-        self.btn_roi = self._add_roi_btn()
-
-        # Add spacer for creating padding on the right side of the header panel
-        self._sz.Add((64, 1), 0)
-
-        # Set the sizer of the Control
-        self.SetSizerAndFit(self._sz)
-
-        self.Bind(wx.EVT_SIZE, self.on_size)
-        self.Layout()
-
-    def _add_roi_btn(self):
-        """ Add a button for stream removal """
-        btn_rem = buttons.ImageButton(self,
-                                      bitmap=img.getBitmap("icon/btn_view_sel.png"),
-                                      size=self.BUTTON_SIZE)
-        btn_rem.SetToolTip("Select ROI")
-        self._add_ctrl(btn_rem)
-        return btn_rem
-
-    def _add_label_ctrl(self):
-        """ Add a label control to the header panel """
-        label_ctrl = wx.StaticText(self, -1, self.Parent.project.name.value)
-        label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
-        label_ctrl.SetForegroundColour(FG_COLOUR_MAIN)
-        self._add_ctrl(label_ctrl, stretch=True)
-        return label_ctrl
-
-    def _add_tint_btn(self):
-        """ Add a tint button to the stream header"""
-
-        tint_btn = buttons.ColourButton(
-            self, -1,
-            size=self.BUTTON_SIZE,
-            colour=self.Parent.project.tint.value,
-            use_hover=True
-        )
-        tint_btn.SetToolTip("Stream display colour")
-
-        # Tint event handlers
-        tint_btn.Bind(wx.EVT_BUTTON, self._on_tint_click)
-        self.Parent.project.tint.subscribe(self._on_tint_value)
-
-        self._add_ctrl(tint_btn)
-        return tint_btn
 
 
 class StreamPanel(wx.Panel):
@@ -1573,6 +1498,119 @@ class StreamBar(wx.Panel):
         self.txt_no_stream.Show(self.is_empty())
 
 
+class FastEMProjectPanelHeader(wx.Control):
+
+    BUTTON_SIZE = (18, 18)  # The pixel size of the button
+    BUTTON_BORDER_SIZE = 9  # Border space around the buttons
+
+    def __init__(self, parent, wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
+                 style=wx.NO_BORDER):
+        assert (isinstance(parent, FastEMProjectPanel))
+        super(FastEMProjectPanelHeader, self).__init__(parent, wid, pos, size, style)
+
+        self.SetBackgroundColour(self.Parent.BackgroundColour)
+
+        # This style enables us to draw the background with our own paint event handler
+        self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
+
+        # Callback when the label changes: (string (text) -> None)
+        self.label_change_callback = None
+
+        # Create and add sizer and populate with controls
+        self._sz = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Fold indicator icon, drawn directly in the background in a fixed position
+        self._foldIcons = wx.ImageList(16, 16)
+        self._foldIcons.Add(img.getBitmap("icon/arr_down_s.png"))
+        self._foldIcons.Add(img.getBitmap("icon/arr_right_s.png"))
+
+        # Add the needed controls to the sizer
+        self.btn_remove = self._add_remove_btn()  # TODO: open dialog "Are you sure?"
+        self.txt_ctrl = self._add_text_ctrl()
+        #self.btn_roi = self._add_roi_btn()
+
+        # Add spacer for creating padding on the right side of the header panel
+        self._sz.Add((64, 1), 0)
+
+        # Set the sizer of the Control
+        self.SetSizerAndFit(self._sz)
+        self.Bind(wx.EVT_SIZE, self.on_size)
+        self.Layout()
+
+    # Control creation methods
+    def _add_remove_btn(self):
+        """ Add a button for stream removal """
+        btn_rem = buttons.ImageButton(self,
+                                      bitmap=img.getBitmap("icon/ico_rem_str.png"),
+                                      size=self.BUTTON_SIZE)
+        btn_rem.bmpHover = img.getBitmap("icon/ico_rem_str_h.png")
+        btn_rem.SetToolTip("Remove stream")
+        self._add_ctrl(btn_rem)
+        return btn_rem
+
+    def _add_roi_btn(self):
+        """ Add a button for roi selection """
+        btn_roi = buttons.ImageButton(self,
+                                      bitmap=img.getBitmap("icon/btn_view_sel.png"),
+                                      size=self.BUTTON_SIZE)
+        btn_roi.SetToolTip("Select ROI")
+        self._add_ctrl(btn_roi)
+        return btn_roi
+
+    def _add_text_ctrl(self):
+        """ Add a label control to the header panel """
+        txt_ctrl = wx.TextCtrl(self, -1, self.Parent.project.name.value, style=wx.BORDER_NONE)
+        txt_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
+        txt_ctrl.SetForegroundColour(FG_COLOUR_MAIN)
+        self._add_ctrl(txt_ctrl, stretch=True)
+        return txt_ctrl
+
+    def _add_ctrl(self, ctrl, stretch=False):
+        """ Add the given control to the header panel
+
+        :param ctrl: (wx.Control) Control to add to the header panel
+        :param stretch: True if the control should expand to fill space
+        """
+
+        # Only the first element has a left border
+        border = wx.ALL if self._sz.IsEmpty() else wx.RIGHT
+
+        self._sz.Add(
+            ctrl,
+            proportion=1 if stretch else 0,
+            flag=(border | wx.ALIGN_CENTRE_VERTICAL | wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
+            border=self.BUTTON_BORDER_SIZE
+        )
+
+    def enable_roi_btn(self, enabled):
+        """ Enable or disable the show button """
+        self.btn_roi.Enable(enabled)
+
+    # Layout and painting
+    def on_size(self, event):
+        """ Handle the wx.EVT_SIZE event for the Expander class """
+        self.SetSize((self.Parent.GetSize().x, -1))
+        self.Layout()
+        self.Refresh()
+        event.Skip()
+
+    def on_draw_expander(self, dc):
+        """ Draw the expand/collapse arrow icon
+
+        It needs to be called from the parent's paint event handler.
+        """
+        win_rect = self.GetRect()
+        x_pos = win_rect.GetRight() - ICON_WIDTH - CAPTION_PADDING_RIGHT
+
+        self._foldIcons.Draw(
+            1 if self.Parent.collapsed else 0,
+            dc,
+            x_pos,
+            (win_rect.GetHeight() - ICON_HEIGHT) // 2,
+            wx.IMAGELIST_DRAW_TRANSPARENT
+        )
+
+
 class FastEMProjectBar(wx.Panel):
     """
     The whole panel containing project panels and a button to add more projects.
@@ -1731,15 +1769,14 @@ class FastEMProjectPanel(wx.Panel):
     DEFAULT_BORDER = 2
     DEFAULT_STYLE = wx.BOTTOM | wx.EXPAND
 
-    def __init__(self, parent, project, options=(OPT_BTN_REMOVE),
+    def __init__(self, parent, project,
                  wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
-                 style=wx.CP_DEFAULT_STYLE, name="StreamPanel", collapsed=False):
+                 style=wx.CP_DEFAULT_STYLE, name="ProjectPanel", collapsed=False):
 
         assert(isinstance(parent, FastEMProjectBar))
         wx.Panel.__init__(self, parent, wid, pos, size, style, name)
 
         self.project = project
-        self.options = options
 
         # Appearance
         self.SetBackgroundColour(BG_COLOUR_STREAM)
@@ -1748,91 +1785,57 @@ class FastEMProjectPanel(wx.Panel):
         # State
         self._collapsed = collapsed
 
-        # Child widgets
-
-        self.main_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.SetSizer(self.main_sizer)
-
-        self._header = None
-        self._panel = None
-
-        self._prev_drange = None
-
-        self.gb_sizer = wx.GridBagSizer()
-
         # Counter that keeps track of the number of rows containing controls inside this panel
         self.num_rows = 0
-
         self.roi_panels = []
 
-        self._create_controls()
-
-    def _create_controls(self):
-        """ Set up the basic structure for the controls that are going to be used """
-
         # Create stream header
-
         self._header = FastEMProjectPanelHeader(self)
-        self._header.Bind(wx.EVT_LEFT_UP, self.on_toggle)
+        #self._header.Bind(wx.EVT_LEFT_UP, self.on_toggle)
         self._header.Bind(wx.EVT_PAINT, self.on_draw_expander)
-
         self.Bind(wx.EVT_BUTTON, self.on_button, self._header)
-
         self._header.btn_remove.Bind(wx.EVT_BUTTON, self.on_remove_btn)
-        if self._header.btn_peak is not None:
-            self._header.btn_peak.Bind(wx.EVT_BUTTON, self.on_peak_btn)
-
-        if wx.Platform == "__WXMSW__":
-            self._header.Bind(wx.EVT_LEFT_DCLICK, self.on_button)
-
-        self.main_sizer.Add(self._header, 0, wx.EXPAND)
-
-
+        #self._header.btn_roi.Bind(wx.EVT_BUTTON, self.on_roi_btn)
 
         # Create the control panel
-
         self._panel = wx.Panel(self, style=wx.TAB_TRAVERSAL | wx.NO_BORDER)
-
-        # Add a simple sizer so we can create padding for the panel
-        border_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        border_sizer.Add(self.gb_sizer, border=5, flag=wx.ALL | wx.EXPAND, proportion=1)
-
-        self._panel.SetSizer(border_sizer)
-
         self._panel.SetBackgroundColour(BG_COLOUR_MAIN)
         self._panel.SetForegroundColour(FG_COLOUR_MAIN)
         self._panel.SetFont(self.GetFont())
 
+        # Add a simple sizer so we can create padding for the panel
+        self.border_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.sz = wx.BoxSizer(wx.VERTICAL)
+        self.border_sizer.Add(self.sz, border=10, flag=wx.BOTTOM | wx.EXPAND, proportion=1)
+        self._panel.SetSizer(self.border_sizer)
+
         # Simplified version of .collapse()
-        self._panel.Show(not self._collapsed)
+        #self._panel.Show(not self._collapsed)
 
+
+        self.main_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.main_sizer.Add(self._header, 0, wx.EXPAND)
         self.main_sizer.Add(self._panel, 0, wx.EXPAND)
+        self.SetSizer(self.main_sizer)
 
-        self.add_roi_panel("ROI 1")
-        # # Add roi button
-        # sz = wx.BoxSizer(wx.HORIZONTAL)
-        # self.btn_add_project = buttons.ImageTextButton(
-        #     self, -1,
-        #     label="ADD ROI",
-        #     style=wx.ALIGN_CENTER,
-        #     bitmap=img.getBitmap("stream_add_b.png")
-        # )
-        # self.btn_add_project.SetForegroundColour("#999999")
-        #
-        # sz.Add(self.btn_add_project, flag=wx.ALL, border=10)
-        # self.gb_sizer.Add(sz, (0,0))
-        # self.btn_add_project.Show(True)
+        # self.SetSizerAndFit(self.main_sizer)
+        # self.Layout()
+        # self.Show()
 
 
-    @control_bookkeeper
-    def add_metadata_button(self):
-        """
-        Add a button that opens a dialog with all metadata (for static streams)
-        """
-        metadata_btn = ImageTextButton(self._panel, label="Metadata...", height=16, style=wx.ALIGN_CENTER)
-        self.gb_sizer.Add(metadata_btn, (self.num_rows, 2), span=(1, 1),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
-        return metadata_btn
+        # Alternative to roi tool in header: "add roi" button analogous to "add project" button
+        # Add roi button
+        sz = wx.BoxSizer(wx.HORIZONTAL)
+        self.btn_roi = buttons.ImageTextButton(
+            self._panel, -1,
+            label="ADD ROI",
+            style=wx.ALIGN_CENTER,
+            bitmap=img.getBitmap("stream_add_b.png")
+        )
+        self.btn_roi.SetForegroundColour("#999999")
+
+        self.sz.Add(self.btn_roi, flag=wx.TOP | wx.LEFT | wx.RIGHT, border=10)
+        self.btn_roi.Show(True)
 
     @property
     def collapsed(self):
@@ -1858,76 +1861,53 @@ class FastEMProjectPanel(wx.Panel):
         """ Focus the text label in the header """
         self._header.set_focus_on_label()
 
-    def Layout(self, *args, **kwargs):
-        """ Layout the StreamPanel. """
+    # def Layout(self, *args, **kwargs):
+    #     """ Layout the StreamPanel. """
+    #
+    #     if not self._header or not self._panel or not self.main_sizer:
+    #         return False  # we need to complete the creation first!
+    #
+    #     oursz = self.GetSize()
+    #
+    #     # move & resize the button and the static line
+    #     self.main_sizer.SetDimension(0, 0, oursz.GetWidth(),
+    #                                  self.main_sizer.GetMinSize().GetHeight())
+    #     self.main_sizer.Layout()
+    #
+    #     if not self._collapsed:
+    #         # move & resize the container window
+    #         yoffset = self.main_sizer.GetSize().GetHeight()
+    #         if oursz.y - yoffset > 0:
+    #             self._panel.SetSize(0, yoffset, oursz.x, oursz.y - yoffset)
+    #             # this is very important to make the pane window layout show
+    #             # correctly
+    #             self._panel.Show()
+    #             self._panel.Layout()
+    #             self.border_sizer.Layout()
+    #
+    #     return True
 
-        if not self._header or not self._panel or not self.main_sizer:
-            return False  # we need to complete the creation first!
-
-        oursz = self.GetSize()
-
-        # move & resize the button and the static line
-        self.main_sizer.SetDimension(0, 0, oursz.GetWidth(),
-                                     self.main_sizer.GetMinSize().GetHeight())
-        self.main_sizer.Layout()
-
-        if not self._collapsed:
-            # move & resize the container window
-            yoffset = self.main_sizer.GetSize().GetHeight()
-            if oursz.y - yoffset > 0:
-                self._panel.SetSize(0, yoffset, oursz.x, oursz.y - yoffset)
-                # this is very important to make the pane window layout show
-                # correctly
-                self._panel.Show()
-                self._panel.Layout()
-
-        return True
-
-    def DoGetBestSize(self, *args, **kwargs):
-        """ Gets the size which best suits the window
-
-        For a control, it would be the minimal size which doesn't truncate the control, for a panel
-        the same size as it would have after a call to `Fit()`.
-
-        TODO: This method seems deprecated. Test if it's really so.
-
-        """
-
-        # do not use GetSize() but rather GetMinSize() since it calculates
-        # the required space of the sizer
-        sz = self.main_sizer.GetMinSize()
-
-        # when expanded, we need more space
-        if not self._collapsed:
-            pbs = self._panel.GetBestSize()
-            sz.width = max(sz.GetWidth(), pbs.x)
-            # For wxPython 4 this is no longer needed
-            # sz.height = sz.y + pbs.y
-
-        return sz
-
-    def Destroy(self, *args, **kwargs):
-        """ Delete the widget from the GUI
-
-        """
-
-        # Avoid receiving data after the object is deleted
-        if hasattr(self, "_sld_hist"):
-            self.stream.histogram.unsubscribe(self.on_histogram)
-        if hasattr(self, "_sld_spec"):
-            self.stream.image.unsubscribe(self.on_new_spec_data)
-
-        super(StreamPanel, self).Destroy(*args, **kwargs)
-
-    def set_visible(self, visible):
-        """ Set the "visible" toggle button of the stream panel """
-        self._header.btn_show.SetToggle(visible)
-
-    def set_peak(self, state):
-        """ Set the "peak" toggle button of the stream panel
-        state (None or 0<=int): None for no peak, 0 for gaussian, 1 for lorentzian
-        """
-        self._header.btn_peak.SetState(state)
+    # def DoGetBestSize(self, *args, **kwargs):
+    #     """ Gets the size which best suits the window
+    #
+    #     For a control, it would be the minimal size which doesn't truncate the control, for a panel
+    #     the same size as it would have after a call to `Fit()`.
+    #
+    #     TODO: This method seems deprecated. Test if it's really so.
+    #     """
+    #
+    #     # do not use GetSize() but rather GetMinSize() since it calculates
+    #     # the required space of the sizer
+    #     sz = self.main_sizer.GetMinSize()
+    #
+    #     # when expanded, we need more space
+    #     if not self._collapsed:
+    #         pbs = self._panel.GetBestSize()
+    #         sz.width = max(sz.GetWidth(), pbs.x)
+    #         # For wxPython 4 this is no longer needed
+    #         # sz.height = sz.y + pbs.y
+    #
+    #     return sz
 
     def collapse(self, collapse):
         """ Collapses or expands the pane window """
@@ -1947,76 +1927,37 @@ class FastEMProjectPanel(wx.Panel):
         self.Thaw()
 
     # GUI events: update the stream when the user changes the values
+    def on_roi_btn(self, evt):
+        logging.debug("ROI button clicked for project '%s'", 1)
+
+        # generate EVT_NEW_ROI
+        event = new_roi_event(spanel=self)
+        wx.PostEvent(self, event)
 
     def on_remove_btn(self, evt):
-        logging.debug("Remove button clicked for '%s'", self.stream.name.value)
+        logging.debug("Remove button clicked for '%s'", 1)
 
-        # generate EVT_STREAM_REMOVE
-        event = stream_remove_event(spanel=self)
+        # generate EVT_PROJECT_REMOVE
+        event = project_remove_event(spanel=self)
         wx.PostEvent(self, event)
 
-    def on_visibility_btn(self, evt):
-        # generate EVT_STREAM_VISIBLE
-        event = stream_visible_event(visible=self._header.btn_show.GetToggle())
-        wx.PostEvent(self, event)
-
-    def on_peak_btn(self, evt):
-        # generate EVT_STREAM_PEAK
-        event = stream_peak_event(state=self._header.btn_peak.GetState())
-        wx.PostEvent(self, event)
-
-    @staticmethod
-    def create_text_frame(heading, text):
-        """
-        Create text frame with cancel button (same style as log frame during backend startup)
-        heading (String): title of the text box
-        text (String): text to be displayed
-        """
-        frame = wx.Dialog(None, title=heading, size=(800, 800),
-                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
-        text = wx.TextCtrl(frame, value=text, style=wx.TE_MULTILINE | wx.TE_READONLY)
-
-        textsizer = wx.BoxSizer()
-        textsizer.Add(text, 1, flag=wx.ALL | wx.EXPAND)
-
-        btnsizer = frame.CreateButtonSizer(wx.CLOSE)
-
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(textsizer, 1, flag=wx.ALL | wx.EXPAND, border=5)
-        sizer.Add(btnsizer, 0, flag=wx.ALIGN_CENTER_VERTICAL | wx.EXPAND | wx.BOTTOM, border=5)
-        frame.SetSizer(sizer)
-        frame.CenterOnScreen()
-        return frame
 
     # Manipulate expander buttons
 
-    def show_updated_btn(self, show):
-        self._header.show_updated_btn(show)
-
-    def enable_updated_btn(self, enabled):
-        self._header.enable_updated_btn(enabled)
-
     def show_remove_btn(self, show):
         self._header.show_remove_btn(show)
-
-    def show_visible_btn(self, show):
-        self._header.show_show_btn(show)
-
-    def show_peak_btn(self, show):
-        self._header.show_peak_btn(show)
 
     def enable(self, enabled):
         self._header.enable(enabled)
 
     def OnSize(self, event):
-        """ Handles the wx.EVT_SIZE event for StreamPanel
+        """ Handles the wx.EVT_SIZE event for FastEMProjectPanel
         """
         self.Layout()
         event.Skip()
 
     def on_toggle(self, evt):
-        """ Detect click on the collapse button of the StreamPanel """
-
+        """ Detect click on the collapse button of the FastEMProjectPanel """
         w = evt.GetEventObject().GetSize().GetWidth()
 
         if evt.GetX() > w * 0.85:
@@ -2025,8 +1966,7 @@ class FastEMProjectPanel(wx.Panel):
             evt.Skip()
 
     def on_button(self, event):
-        """ Handles the wx.EVT_BUTTON event for StreamPanel """
-
+        """ Handles the wx.EVT_BUTTON event for FastEMProjectPanel """
         if event.GetEventObject() != self._header:
             event.Skip()
             return
@@ -2037,7 +1977,6 @@ class FastEMProjectPanel(wx.Panel):
         """ Handle the ``wx.EVT_PAINT`` event for the stream panel
         :note: This is a drawing routine to paint the GTK-style expander.
         """
-
         dc = wx.AutoBufferedPaintDC(self._header)
         dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
         dc.Clear()
@@ -2053,104 +1992,130 @@ class FastEMProjectPanel(wx.Panel):
         self._header.to_static_mode()
         self._header.to_locked_mode()
 
-    # Setting Control Addition Methods
 
-    def _add_side_label(self, label_text, tooltip=None):
-        """ Add a text label to the control grid
+    def add_roi_panel(self, roi_ctrl):
+        """ Add a ROI control panel to the project panel, append .roi_panels.
 
-        This method should only be called from other methods that add control to the control grid
-
-        :param label_text: (str)
-        :return: (wx.StaticText)
-
+        :param name: (str) default name of the ROI
+        :return: (FastEMRoiPanel)
         """
+        self.num_rows += 1
 
-        lbl_ctrl = wx.StaticText(self._panel, -1, label_text)
-        if tooltip:
-            lbl_ctrl.SetToolTip(tooltip)
+        self.sz.Add(roi_ctrl, border=10, flag=wx.LEFT | wx.RIGHT | wx.EXPAND, proportion=1)
+        self.roi_panels.append(roi_ctrl)
+        self.Layout()
+        roi_ctrl.Layout()
+        roi_ctrl.Show()
 
-        self.gb_sizer.Add(lbl_ctrl, (self.num_rows, 0),
-                          flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-        return lbl_ctrl
+        self.fit_streams()
 
-    @control_bookkeeper
-    def add_roi_panel(self, name, value=None):
-        """ Add a generic number control to manipulate a hardware setting """
+    def fit_streams(self):
+        # When the whole window/app is destroyed, each widget receives a destroy
+        # event. In such a case, it's not worthy re-fitting the streams, and
+        # especially it can fail because some other objects have already been
+        # destroyed.
+        if not self or self.IsBeingDeleted():
+            logging.debug("Stream panelbar is being deleted, not refitting")
+            return
 
-        roi_ctrl = FastEMRoiPanel(self, "ROI 1")
+        logging.debug("Refitting stream panels")
+        #self._set_warning()
 
-        self.gb_sizer.Add(roi_ctrl, (2, 0), span=(1, 2),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+        h = self.sz.GetMinSize().GetHeight()
+        self.SetSize((-1, h))
 
-        return roi_ctrl
+        p = self.Parent
+        while not isinstance(p, FoldPanelItem):
+            p = p.Parent
+
+        p.Refresh()
 
 
-class FastEMRoiPanel(wx.Panel):
+class FastEMROIPanel(wx.Panel):
     BUTTON_SIZE = (18, 18)  # The pixel size of the button
     BUTTON_BORDER_SIZE = 9  # Border space around the buttons
 
-    def __init__(self, parent, name, options=(OPT_BTN_REMOVE),
-                 wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
+    def __init__(self, parent, name, wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=wx.CP_DEFAULT_STYLE):
-        wx.Panel.__init__(self, parent, wid, pos, size, style, name)
+
+        assert(isinstance(parent, FastEMProjectPanel))
+        # Initialize panel
+        wx.Panel.__init__(self, parent._panel, wid, pos, size, style, name)
         self.parent = parent
         self._sz = wx.BoxSizer(wx.HORIZONTAL)
         self.SetForegroundColour(gui.FG_COLOUR_EDIT)
         self.SetBackgroundColour(gui.BG_COLOUR_MAIN)
 
+        # Add controls
         self.btn_remove = self._add_remove_btn()
-        lbl_ctrl = self._add_side_label(name)
+        self.txt_ctrl = self._add_text_ctrl(name)
 
-        hw_set = ComboBox(self, value="Calibration A", choices=["Calibration A", "Calibration B"], size=(-1, 16),
+        # Event binding
+        self.btn_remove.Bind(wx.EVT_BUTTON, self._on_remove_btn)
+
+        # Combobox to select calibration
+        cal_ctrl = ComboBox(self, value="Calibration 0", choices=["Calibration 0", "Calibration 1"], size=(100, -1),
                           style=wx.CB_READONLY | wx.BORDER_NONE)
-        self._add_ctrl(hw_set)
+        self._add_ctrl(cal_ctrl)
 
+        # Fit sizer
+        #self._sz.Add((260, 1), 0)
+        self._sz.AddSpacer(5)
         self.SetSizerAndFit(self._sz)
+        self.Bind(wx.EVT_SIZE, self.on_size)
         self.Layout()
+        self.parent.Refresh()
+
 
     def _add_remove_btn(self):
-        """ Add a button for stream removal """
+        """ Add a button for ROI removal """
         btn_rem = buttons.ImageButton(self,
                                       bitmap=img.getBitmap("icon/ico_rem_str.png"),
                                       size=self.BUTTON_SIZE)
         btn_rem.bmpHover = img.getBitmap("icon/ico_rem_str_h.png")
-        btn_rem.SetToolTip("Remove stream")
+        btn_rem.SetToolTip("Remove ROI")
         self._add_ctrl(btn_rem)
         return btn_rem
 
+    def _add_text_ctrl(self, default_text):
+        """ Add a text ctrl to the control grid
+
+        :param default_text: (str)
+        :return: (wx.TextCtrl)
+        """
+        txt_ctrl = wx.TextCtrl(self, -1, default_text, style=wx.BORDER_NONE)
+        txt_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
+        txt_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+        self._add_ctrl(txt_ctrl, True)
+        return txt_ctrl
+
     def _add_ctrl(self, ctrl, stretch=False):
-        """ Add the given control to the header panel
+        """ Add the given control to the panel
 
         :param ctrl: (wx.Control) Control to add to the header panel
         :param stretch: True if the control should expand to fill space
-
         """
-
-        border = wx.RIGHT
-
         self._sz.Add(
             ctrl,
             proportion=1 if stretch else 0,
-            flag=(border | wx.ALIGN_CENTRE_VERTICAL | wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
+            flag=(wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
             border=self.BUTTON_BORDER_SIZE
         )
 
-    def _add_side_label(self, label_text, tooltip=None):
-        """ Add a text label to the control grid
+    def _on_remove_btn(self):
+        logging.debug("Remove button clicked for ROI '%s'", self.txt_ctrl.value)
 
-        This method should only be called from other methods that add control to the control grid
+        # generate EVT_ROI_REMOVE
+        event = roi_remove_event(spanel=self)
+        wx.PostEvent(self, event)
 
-        :param label_text: (str)
-        :return: (wx.StaticText)
+    def on_size(self, event):
+        """ Handle the wx.EVT_SIZE event for the Expander class """
+        self.SetSize((self.Parent.GetSize().x, -1))
+        self.Layout()
+        self.Refresh()
+        event.Skip()
 
-        """
-
-        lbl_ctrl = wx.StaticText(self, -1, label_text)
-        if tooltip:
-            lbl_ctrl.SetToolTip(tooltip)
-
-        self._add_ctrl(lbl_ctrl, True)
-        return lbl_ctrl
 
 class FastEMCalibrationBar(StreamBar):
     """
@@ -2168,24 +2133,6 @@ class FastEMCalibrationBar(StreamBar):
 
     DEFAULT_BORDER = 2
     DEFAULT_STYLE = wx.BOTTOM | wx.EXPAND
-    # the order in which the streams are displayed
-    STREAM_ORDER = (
-        acq.stream.ScannerSettingsStream,
-        acq.stream.SEMStream,
-        acq.stream.StaticSEMStream,
-        acq.stream.BrightfieldStream,
-        acq.stream.StaticStream,
-        acq.stream.FluoStream,
-        acq.stream.CLStream,
-        acq.stream.CameraStream,
-        acq.stream.ARSettingsStream,
-        acq.stream.SpectrumSettingsStream,
-        acq.stream.ScannedTemporalSettingsStream,
-        acq.stream.TemporalSpectrumSettingsStream,
-        acq.stream.MonochromatorSettingsStream,
-        acq.stream.CameraCountStream,
-        acq.stream.ScannedTCSettingsStream
-    )
 
     def __init__(self, *args, **kwargs):
 
@@ -2200,171 +2147,27 @@ class FastEMCalibrationBar(StreamBar):
 
         # Calibration Grid
         calgrid_sz = wx.GridBagSizer(3, 3)
-        for i, lbl in enumerate(["A", "B", "C", "D", "E", "F", "G", "H", "I"]):
+        for i, lbl in enumerate(["0", "1", "2", "3", "4", "5", "6", "7", "8"]):  #enumerate(["A", "B", "C", "D", "E", "F", "G", "H", "I"]):
             subsz = wx.BoxSizer(wx.HORIZONTAL)
-            txt = wx.StaticText(self, wx.ALL | wx.ALIGN_CENTER, lbl, size=(10, -1))
-            subsz.Add(txt)
-            subsz.AddSpacer(10)
             btn = wx.Button(self, wx.ALL | wx.ALIGN_CENTER, label="?", size=(30, 30))
+            #btn = buttons.ImageButton(self, bitmap=img.getBitmap("menu/btn_checkmark2.png"), size=(30, 30))
             btn.SetBackgroundColour("#999999")
+            btn.Bind(wx.EVT_BUTTON, self.on_button)
             subsz.Add(btn)
-            subsz.AddSpacer(40)
+            subsz.AddSpacer(8)
+
             calgrid_sz.Add(subsz, pos=(i // 3, i % 3))
+            txt = wx.StaticText(self, wx.ALL | wx.ALIGN_CENTER, lbl, size=(10, -1))
+            subsz.Add(txt, wx.LEFT | wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, 5)
+            subsz.AddSpacer(20)
 
         self._sz.Add(calgrid_sz, 0, wx.ALL | wx.ALIGN_CENTER, 10)
         self._sz.AddSpacer(10)
 
         self.txt_no_stream = wx.StaticText(self, -1, "")
-        self.fit_streams()
 
-    def fit_streams(self):
-        # When the whole window/app is destroyed, each widget receives a destroy
-        # event. In such a case, it's not worthy re-fitting the streams, and
-        # especially it can fail because some other objects have already been
-        # destroyed.
-        if not self or self.IsBeingDeleted():
-            logging.debug("Stream panelbar is being deleted, not refitting")
-            return
-
-        logging.debug("Refitting stream panels")
-        self._set_warning()
-
-        h = self._sz.GetMinSize().GetHeight()
-        self.SetSize((-1, h))
-
-        p = self.Parent
-        while not isinstance(p, FoldPanelItem):
-            p = p.Parent
-
-        p.Refresh()
-
-    # TODO: maybe should be provided after init by the controller (like key of
-    # sorted()), to separate the GUI from the model ?
-    def _get_stream_order(self, stream):
-        """ Gives the "order" of the given stream, as defined in STREAM_ORDER.
-
-        Args:
-            stream (Stream): a stream
-
-        Returns:
-            (int >= 0): the order
-
-        """
-
-        for i, c in enumerate(self.STREAM_ORDER):
-            if isinstance(stream, c):
-                return i
-
-        msg = "Stream %s of unknown order type %s"
-        logging.warning(msg, stream.name.value, stream.__class__.__name__)
-        return len(self.STREAM_ORDER)
-
-    # === VA handlers
-
-    # Moved to stream controller
-
-    # === Event Handlers
-
-    def on_stream_remove(self, evt):
-        """
-        Called when user request to remove a stream via the stream panel
-        """
-        st = evt.spanel.stream
-        logging.debug("User removed stream (panel) %s", st.name.value)
-        # delete stream panel
-        self.remove_stream_panel(evt.spanel)
-
-        # Publish removal notification
-        pub.sendMessage("stream.remove", stream=st)
-
-    def on_streamp_destroy(self, evt):
-        """
-        Called when a stream panel is completely removed
-        """
-        self.fit_streams()
-
-    # === API of the stream panel
-    def show_add_button(self):
-        self.btn_add_stream.Show()
-        self.fit_streams()
-
-    def hide_add_button(self):
-        self.btn_add_stream.Hide()
-        self.fit_streams()
-
-    def is_empty(self):
-        return len(self.stream_panels) == 0
-
-    def get_size(self):
-        """ Return the number of streams contained within the StreamBar """
-        return len(self.stream_panels)
-
-    def add_stream_panel(self, spanel, show=True):
-        """
-        This method adds a stream panel to the stream bar. The appropriate
-        position is automatically determined.
-        spanel (StreamPanel): a stream panel
-        """
-        # Insert the spanel in the order of STREAM_ORDER. If there are already
-        # streams with the same type, insert after them.
-        ins_pos = 0
-        order_s = self._get_stream_order(spanel.stream)
-        for e in self.stream_panels:
-            order_e = self._get_stream_order(e.stream)
-            if order_s < order_e:
-                break
-            ins_pos += 1
-
-        logging.debug("Inserting %s at position %s", spanel.stream.__class__.__name__, ins_pos)
-
-        self.stream_panels.insert(ins_pos, spanel)
-
-        if self._sz is None:
-            self._sz = wx.BoxSizer(wx.VERTICAL)
-            self.SetSizer(self._sz)
-
-        self._sz.Insert(ins_pos, spanel,
-                              flag=self.DEFAULT_STYLE,
-                              border=self.DEFAULT_BORDER)
-
-        # TODO: instead of a stream_remove message, just take a callable to call
-        # when the stream needs to be removed
-        spanel.Bind(EVT_STREAM_REMOVE, self.on_stream_remove)
-        spanel.Bind(wx.EVT_WINDOW_DESTROY, self.on_streamp_destroy, source=spanel)
-        spanel.Layout()
-
-        # hide the stream if the current view is not compatible
-        spanel.Show(show)
-        self.fit_streams()
-
-    def remove_stream_panel(self, spanel):
-        """
-        Removes a stream panel
-        Deletion of the actual stream must be done separately.
-        Must be called in the main GUI thread
-        """
-        # Remove it from the sizer explicitly, because even if the sizer will
-        # eventually detect it (via the destroy event), that will be later, and
-        # until then the fit_stream will not be correct.
-        self._sz.Detach(spanel)
-        self.stream_panels.remove(spanel)
-        spanel.Destroy()
-
-    def clear(self):
-        """
-        Remove all stream panels
-        Must be called in the main GUI thread
-        """
-        for p in list(self.stream_panels):
-            # Only refit the (empty) bar after all streams are gone
-            p.Unbind(wx.EVT_WINDOW_DESTROY, source=p, handler=self.on_streamp_destroy)
-            self.remove_stream_panel(p)
-
-        self.fit_streams()
-
-    def _set_warning(self):
-        """ Display a warning text when no streams are present, or show it
-        otherwise.
-        """
-        pass
-        #self.txt_no_stream.Show(self.is_empty())
+    def on_button(self, evt):
+        btn = evt.GetEventObject()
+        btn.SetLabel("OK")
+        btn.SetForegroundColour(wx.GREEN)
+        #btn.SetBitmapSelected(img.getBitmap("icon/ico_checkmark.png"))

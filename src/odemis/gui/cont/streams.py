@@ -37,7 +37,7 @@ from odemis.acq.stream import MeanSpectrumProjection
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, \
     CONTROL_COMBO, CONTROL_FLT, FG_COLOUR_MAIN, BG_COLOUR_MAIN
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
-from odemis.gui.comp.stream import StreamPanel, FastEMProjectPanel, EVT_STREAM_VISIBLE, \
+from odemis.gui.comp.stream import StreamPanel, FastEMProjectPanel, FastEMROIPanel, EVT_STREAM_VISIBLE, \
     EVT_STREAM_PEAK, OPT_BTN_REMOVE, OPT_BTN_SHOW, OPT_BTN_UPDATE, OPT_BTN_TINT, \
     OPT_NAME_EDIT, OPT_BTN_PEAK
 from odemis.gui.conf import data
@@ -2977,7 +2977,7 @@ class SparcStreamsController(StreamBarController):
                 s.useScanStage.value = use
 
 
-class FastEMProjectController(StreamBarController):
+class FastEMProjectBarController(StreamBarController):
     """
     Controls the streams for the SPARC acquisition tab
     In addition to the standard controller it:
@@ -2994,6 +2994,7 @@ class FastEMProjectController(StreamBarController):
         self._main_data_model = tab_data.main
         self._project_bar = project_bar
         self._addProject("Project 1")
+        self._createAddStreamActions()
 
     def add_action(self, title, callback, check_enabled=None):
         pass
@@ -3006,7 +3007,7 @@ class FastEMProjectController(StreamBarController):
         main_data = self._main_data_model
         #self.add_action("New Project", self._addProject)
 
-        self.Bind(wx.EVT_BUTTON, self._on_add_project, self._project_bar.btn_add_project)
+        self._project_bar.btn_add_project.Bind(wx.EVT_BUTTON, self._on_add_project)
 
     def add_action(self, title, callback, check_enabled=None):
         """ Add an action to the stream menu
@@ -3025,15 +3026,17 @@ class FastEMProjectController(StreamBarController):
             self.menu_actions[title] = callback
             self._stream_bar.btn_add_stream.add_choice(title, callback, check_enabled)
 
-    def _on_add_project(self):
+    def _on_add_project(self, evt):
         self._addProject("Project 1")
 
     def _addProject(self, name):
         name = "Project %s" % (len(self._tab_data_model.projects) + 1)
-        p = FastEMProject(name, self._project_bar)
+        p = FastEMProjectController(name, self._tab_data_model, self._project_bar)
+
 
         # add the stream to the acquisition set
-        #self._tab_data_model.projects.insert(p)
+        self._tab_data_model.projects.append(p)
+        return p
         #
         # if visible:
         #     linked_view = None
@@ -3058,24 +3061,36 @@ class FastEMProjectController(StreamBarController):
         # return self._add_stream(s, **kwargs)
 
 
+class FastEMProjectController(object):
+    def __init__(self, name, tab_data, project_bar):
+        self.name = model.StringVA(name)
+        self.rois = model.ListVA([])
+
+        self.panel = FastEMProjectPanel(project_bar, self)
+        project_bar.add_project_panel(self.panel)
+        self.tab_data = tab_data
+        self.panel.btn_roi.Bind(wx.EVT_BUTTON, self._addROI)
+
+
+    def _addROI(self, evt):
+        roi = FastEMROIController(self, self.tab_data, self.panel)
+        self.rois.value.append(roi)
+
+
+class FastEMROIController(object):
+
+    def __init__(self, project, tab_data, project_panel):
+        self._tab_data_model = tab_data
+        self._main_data_model = tab_data.main
+        self.project = project
+        self.panel = FastEMROIPanel(project_panel, "ROI %s" % len(self.project.rois.value))
+        project_panel.add_roi_panel(self.panel)
+
+
 class FastEMCalibrationController(StreamBarController):
     """
-    Controls the streams for the SPARC acquisition tab
-    In addition to the standard controller it:
-     * Knows how to create the special RepeptionStreams
-     * Updates the .acquisitionStreams when a stream is added/removed
-     * Connects tab_data.useScanStage to the streams
-
-    Note: tab_data.spotStream should be in tab_data.streams
     """
 
     def __init__(self, tab_data, project_bar, *args, **kwargs):
         pass
 
-
-class FastEMProject(object):
-    def __init__(self, name, project_bar):
-        self.name = model.StringVA(name)
-        self.rois = None#ListVA()
-        ppanel = FastEMProjectPanel(project_bar, self)
-        project_bar.add_project_panel(ppanel)

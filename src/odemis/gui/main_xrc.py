@@ -435,18 +435,13 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         self.pnl_left = xrc.XRCCTRL(self, "pnl_left")
         self.sparc_acq_toolbar = xrc.XRCCTRL(self, "sparc_acq_toolbar")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.pnl_sparc_grid = xrc.XRCCTRL(self, "pnl_sparc_grid")
-        self.vp_sparc_tl = xrc.XRCCTRL(self, "vp_sparc_tl")
-        self.vp_sparc_tr = xrc.XRCCTRL(self, "vp_sparc_tr")
-        self.vp_sparc_bl = xrc.XRCCTRL(self, "vp_sparc_bl")
-        self.vp_sparc_ts = xrc.XRCCTRL(self, "vp_sparc_ts")
-        self.vp_sparc_br = xrc.XRCCTRL(self, "vp_sparc_br")
+        self.pnl_fastem_grid = xrc.XRCCTRL(self, "pnl_fastem_grid")
+        self.vp_fastem_acqui = xrc.XRCCTRL(self, "vp_fastem_acqui")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
         self.pnl_fastem_calibration = xrc.XRCCTRL(self, "pnl_fastem_calibration")
         self.pnl_fastem_projects = xrc.XRCCTRL(self, "pnl_fastem_projects")
-        self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
-        self.btn_sparc_change_file = xrc.XRCCTRL(self, "btn_sparc_change_file")
+        self.txt_num_rois = xrc.XRCCTRL(self, "txt_num_rois")
         self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
         self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
         self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
@@ -4302,35 +4297,12 @@ def __init_resources():
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="ViewportGrid" name="pnl_sparc_grid">
-          <object class="LiveViewport" name="vp_sparc_tl">
+        <object class="ViewportGrid" name="pnl_fastem_grid">
+          <object class="FastEMAcquisitionViewport" name="vp_fastem_acqui">
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="ARAcquiViewport" name="vp_sparc_tr">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="PointSpectrumViewport" name="vp_sparc_bl">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="TemporalSpectrumViewport" name="vp_sparc_ts">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="ChronographViewport" name="vp_sparc_br">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>
@@ -4415,44 +4387,23 @@ def __init_resources():
                           <object class="wxFlexGridSizer">
                             <object class="sizeritem">
                               <object class="wxStaticText">
-                                <label>Filename</label>
+                                <label>Total number of ROIs:</label>
                                 <fg>#E5E5E5</fg>
                               </object>
                               <flag>wxTOP</flag>
-                              <border>4</border>
+                              <border>2</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxBoxSizer">
-                                <object class="sizeritem">
-                                  <object class="wxTextCtrl" name="txt_filename">
-                                    <size>-1,20</size>
-                                    <value>Select a destination file</value>
-                                    <fg>#2FA7D4</fg>
-                                    <bg>#333333</bg>
-                                    <style>wxBORDER_NONE|wxTE_READONLY</style>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                  </object>
-                                  <option>1</option>
-                                  <flag>wxTOP|wxEXPAND</flag>
-                                  <border>2</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_sparc_change_file">
-                                    <height>24</height>
-                                    <face_colour>def</face_colour>
-                                    <label>change…</label>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                  </object>
-                                  <flag>wxTOP</flag>
-                                  <border>2</border>
-                                </object>
-                                <orient>wxHORIZONTAL</orient>
+                              <object class="wxTextCtrl" name="txt_num_rois">
+                                <size>200,20</size>
+                                <value>...</value>
+                                <fg>#BFBFBF</fg>
+                                <bg>#333333</bg>
+                                <style>wxBORDER_NONE|wxTE_READONLY</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
                               </object>
-                              <flag>wxEXPAND</flag>
                             </object>
                             <object class="sizeritem">
                               <object class="wxStaticText">

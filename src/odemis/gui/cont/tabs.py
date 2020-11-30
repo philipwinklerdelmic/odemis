@@ -68,7 +68,7 @@ from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
-    PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, ChronographViewport
+    PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, ChronographViewport, FastEMAcquisitionViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config, \
     get_hw_config
@@ -1251,15 +1251,14 @@ class FastEMAcquisitionTab(Tab):
         super(FastEMAcquisitionTab, self).__init__(name, button, panel, main_frame, tab_data)
         self.set_label("ACQUISITION")
 
-        viewports = panel.pnl_sparc_grid.viewports
-        for vp in viewports[:4]:
-            assert(isinstance(vp, (MicroscopeViewport, PlotViewport, TemporalSpectrumViewport)))
+        viewports = panel.pnl_fastem_grid.viewports
+        #assert(isinstance(viewports[0], FastEMAcquisitionViewport))
 
         # Connect the views
         # TODO: make them different depending on the hardware available?
         #       If so, to what? Does having multiple SEM views help?
         vpv = collections.OrderedDict([
-            (viewports[0],
+            (panel.vp_fastem_acqui,
              {"name": "Overview",
               "cls": guimod.ContentView,  # Center on content (instead of stage)
               #"stage": main_data.stage,
@@ -1270,7 +1269,7 @@ class FastEMAcquisitionTab(Tab):
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
         # Create Stream Bar Controller
-        self._stream_controller = streamcont.FastEMProjectController(
+        self._stream_controller = streamcont.FastEMProjectBarController(
             tab_data,
             panel.pnl_fastem_projects,
             ignore_view=True,  # Show all stream panels, independent of any selected viewport

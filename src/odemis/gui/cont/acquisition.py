@@ -888,12 +888,13 @@ class FastEMAcquiController(object):
         # Filename to save the acquisition
         self.filename = model.StringVA(create_filename(self.conf.last_path, self.conf.fn_ptn,
                                                        self.conf.last_extension, self.conf.fn_count))
-        self.filename.subscribe(self._onFilename, init=True)
+        path, base = os.path.split(self.conf.last_path)
+        self._tab_panel.txt_destination.SetValue(str(path))
+        self._tab_panel.txt_num_rois.SetValue("0")
 
         # For acquisition
         # a ProgressiveFuture if the acquisition is going on
         self.btn_acquire = self._tab_panel.btn_sparc_acquire
-        self.btn_change_file = self._tab_panel.btn_sparc_change_file
         self.btn_cancel = self._tab_panel.btn_sparc_cancel
         self.acq_future = None
         self.gauge_acq = self._tab_panel.gauge_sparc_acq
@@ -907,7 +908,6 @@ class FastEMAcquiController(object):
 
         # Link buttons
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
-        self.btn_change_file.Bind(wx.EVT_BUTTON, self.on_change_file)
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
 
         self.gauge_acq.Hide()
@@ -948,15 +948,6 @@ class FastEMAcquiController(object):
             if n not in self.VAS_NO_ACQUSITION_EFFECT:
                 vas.add(va)
         return vas
-
-    def _onFilename(self, name):
-        """ updates the GUI when the filename is updated """
-        # decompose into path/file
-        path, base = os.path.split(name)
-        self._tab_panel.txt_destination.SetValue(str(path))
-        # show the end of the path (usually more important)
-        self._tab_panel.txt_destination.SetInsertionPointEnd()
-        self._tab_panel.txt_filename.SetValue(str(base))
 
     def _onROA(self, roi):
         """ updates the acquire button according to the acquisition ROI """
@@ -1022,36 +1013,37 @@ class FastEMAcquiController(object):
 
     @wxlimit_invocation(1) # max 1/s
     def update_acquisition_time(self):
-        if self._ellipsis_animator:
-            # cancel if there is an ellipsis animator updating the status message
-            self._ellipsis_animator.cancel()
-            self._ellipsis_animator = None
-
-        # Don't update estimated time if acquisition is running (as we are
-        # sharing the label with the estimated time-to-completion).
-        if self._main_data_model.is_acquiring.value:
-            return
-
-        lvl = None  # icon status shown
-        if self._main_data_model.is_preparing.value:
-            txt = u"Optical path is being reconfigured…"
-            self._ellipsis_animator = EllipsisAnimator(txt, self.lbl_acqestimate)
-            self._ellipsis_animator.start()
-            lvl = logging.INFO
-        elif self._roa.value == UNDEFINED_ROI:
-            # TODO: update the default text to be the same
-            txt = u"Region of acquisition needs to be selected"
-            lvl = logging.WARN
-        else:
-            streams = self._tab_data_model.acquisitionStreams
-            acq_time = acqmng.estimateTime(streams)
-            acq_time = math.ceil(acq_time)  # round a bit pessimistic
-            txt = u"Estimated time is {}."
-            txt = txt.format(units.readable_time(acq_time))
-
-        logging.debug("Updating status message %s, with level %s", txt, lvl)
-        self.lbl_acqestimate.SetLabel(txt)
-        self._show_status_icons(lvl)
+        pass
+        # if self._ellipsis_animator:
+        #     # cancel if there is an ellipsis animator updating the status message
+        #     self._ellipsis_animator.cancel()
+        #     self._ellipsis_animator = None
+        #
+        # # Don't update estimated time if acquisition is running (as we are
+        # # sharing the label with the estimated time-to-completion).
+        # if self._main_data_model.is_acquiring.value:
+        #     return
+        #
+        # lvl = None  # icon status shown
+        # if self._main_data_model.is_preparing.value:
+        #     txt = u"Optical path is being reconfigured…"
+        #     self._ellipsis_animator = EllipsisAnimator(txt, self.lbl_acqestimate)
+        #     self._ellipsis_animator.start()
+        #     lvl = logging.INFO
+        # elif self._roa.value == UNDEFINED_ROI:
+        #     # TODO: update the default text to be the same
+        #     txt = u"Region of acquisition needs to be selected"
+        #     lvl = logging.WARN
+        # else:
+        #     streams = self._tab_data_model.acquisitionStreams
+        #     acq_time = acqmng.estimateTime(streams)
+        #     acq_time = math.ceil(acq_time)  # round a bit pessimistic
+        #     txt = u"Estimated time is {}."
+        #     txt = txt.format(units.readable_time(acq_time))
+        #
+        # logging.debug("Updating status message %s, with level %s", txt, lvl)
+        # self.lbl_acqestimate.SetLabel(txt)
+        # self._show_status_icons(lvl)
 
     def _show_status_icons(self, lvl):
         # update status icon to show the logging level

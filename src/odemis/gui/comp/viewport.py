@@ -1902,3 +1902,11 @@ class LineSpectrumViewport(TwoDViewPort):
             self.clear()
 
         self.Refresh()
+
+
+class FastEMAcquisitionViewport(MicroscopeViewport):
+    """ A Viewport containing a downscaled overview image of the loaded sample """
+
+    pass
+
+
