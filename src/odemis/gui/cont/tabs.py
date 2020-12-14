@@ -1252,14 +1252,14 @@ class FastEMAcquisitionTab(Tab):
         self.set_label("ACQUISITION")
 
         viewports = panel.pnl_fastem_grid.viewports
-        #assert(isinstance(viewports[0], FastEMAcquisitionViewport))
+        assert(isinstance(viewports[0], FastEMAcquisitionViewport))
 
         # Connect the views
         # TODO: make them different depending on the hardware available?
         #       If so, to what? Does having multiple SEM views help?
         vpv = collections.OrderedDict([
             (panel.vp_fastem_acqui,
-             {"name": "Overview",
+             {"name": "Acquisition",
               "cls": guimod.ContentView,  # Center on content (instead of stage)
               #"stage": main_data.stage,
               "stream_classes": (EMStream),
@@ -1272,7 +1272,6 @@ class FastEMAcquisitionTab(Tab):
         self._stream_controller = streamcont.FastEMProjectBarController(
             tab_data,
             panel.pnl_fastem_projects,
-            ignore_view=True,  # Show all stream panels, independent of any selected viewport
             view_ctrl=self.view_controller,
         )
         main_data.is_acquiring.subscribe(self.on_acquisition)
@@ -1280,9 +1279,10 @@ class FastEMAcquisitionTab(Tab):
         self._calibration_controller = streamcont.FastEMCalibrationController(
             tab_data,
             panel.pnl_fastem_calibration,
-            ignore_view=True,  # Show all stream panels, independent of any selected viewport
             view_ctrl=self.view_controller,
         )
+
+
 
         self._acquisition_controller = acqcont.FastEMAcquiController(
             tab_data,
@@ -1313,12 +1313,8 @@ class FastEMAcquisitionTab(Tab):
         self.panel.btn_sparc_change_file.Enable(not is_acquiring)
 
     def Show(self, show=True):
-        assert (show != self.IsShown())  # we assume it's only called when changed
         super(FastEMAcquisitionTab, self).Show(show)
 
-        # pause streams when not displayed
-        if not show:
-            self._stream_controller.pauseStreams()
 
     def terminate(self):
         # make sure the streams are stopped

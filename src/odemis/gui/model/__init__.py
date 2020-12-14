@@ -998,7 +998,22 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
         self.semStream = None
 
         self.calibrationStreams = {}
-        self.projects = []
+        self.projects = model.ListVA()  # list of FastEMProject
+
+
+class FastEMProject(object):
+    """ Representation of a FastEM project. """
+    def __init__(self, name):
+        self.name = model.StringVA(name)
+        self.rois = model.ListVA()  # List of FastEMROI
+
+
+class FastEMROI(object):
+    """ Representation of a FastEM ROI. """
+    def __init__(self, name, coordinates, calibration):
+        self.name = model.StringVA(name)
+        self.coordinates = model.TupleContinuous(coordinates)
+        self.calibration = model.IntVA(calibration)
 
 
 class FileInfo(object):

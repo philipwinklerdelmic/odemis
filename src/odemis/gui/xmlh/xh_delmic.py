@@ -275,9 +275,6 @@ class FastEMCalibrationBarXmlHandler(xrc.XmlResourceHandler):
                                           self.GetStyle(),
                                           add_button=self.GetBool('add_button'))
             self.SetupWindow(w)
-            # 'Dirty' fix for the hard coded 'add stream' child button
-            if self.GetBool('add_button'):
-                w.btn_add_stream.SetBackgroundColour(w.GetBackgroundColour())
             parent.add_item(w)
             return w
 HANDLER_CLASS_LIST.append(FastEMCalibrationBarXmlHandler)

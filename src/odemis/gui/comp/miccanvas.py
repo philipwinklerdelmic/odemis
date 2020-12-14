@@ -1752,3 +1752,46 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
             img = self._get_img_from_buffer()
             if img is not None:
                 self.view.thumbnail.value = img
+
+
+class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
+    """ Canvas for FastEM Acquisition tab, similar to DblMicroscopeCanvas, but can contain multiple roa overlays. """
+
+    def __init__(self, *args, **kwargs):
+        DblMicroscopeCanvas.__init__(self, *args, **kwargs)
+        # Overlay that listens to left click for ROI selection
+        self.main_overlay = world_overlay.WorldSelectOverlay(self)
+        self.roa_overlays = []
+
+    def setView(self, view, tab_data):
+        # Keep reference to tab_data
+        self._projects = tab_data.projects
+
+    def add_roa_overlay(self, roa, colour=gui.SELECTION_COLOUR):
+
+        self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, roa, colour=colour)
+        self.roa_overlay.deactivate()
+        self.add_world_overlay(self.roa_overlay)
+        self.roa_overlays.append(self.roa_overlay)
+        self.roa_overlay.activate()
+
+
+    def on_left_up(self, evt):
+        """ End the dragging procedure """
+
+        # If a ROI is selected
+        roi = self._get_roi_from_pos(evt.Position)
+        if roi:
+            roi.overlay.activate()
+
+
+        # If the canvas was being dragged
+        super(FastEMAcquisitionCanvas, self).on_left_up(evt)
+
+    def _get_roi_from_pos(self, pos):
+        roi = None
+        for p in self._projects.value:
+            for r in p.rois.value:
+                if
+
+        return roi

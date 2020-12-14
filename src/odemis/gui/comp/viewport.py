@@ -1907,6 +1907,8 @@ class LineSpectrumViewport(TwoDViewPort):
 class FastEMAcquisitionViewport(MicroscopeViewport):
     """ A Viewport containing a downscaled overview image of the loaded sample """
 
-    pass
+    canvas_class = miccanvas.FastEMAcquisitionCanvas
 
 
+    # def setView(self, view, tab_data):
+    #     self._view = view

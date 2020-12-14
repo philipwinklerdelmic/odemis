@@ -2056,6 +2056,7 @@ class FastEMROIPanel(wx.Panel):
         # Combobox to select calibration
         cal_ctrl = ComboBox(self, value="Calibration 0", choices=["Calibration 0", "Calibration 1"], size=(100, -1),
                           style=wx.CB_READONLY | wx.BORDER_NONE)
+        # TODO: don't highlight text
         self._add_ctrl(cal_ctrl)
 
         # Fit sizer
@@ -2102,7 +2103,7 @@ class FastEMROIPanel(wx.Panel):
             border=self.BUTTON_BORDER_SIZE
         )
 
-    def _on_remove_btn(self):
+    def _on_remove_btn(self, evt):
         logging.debug("Remove button clicked for ROI '%s'", self.txt_ctrl.value)
 
         # generate EVT_ROI_REMOVE
@@ -2171,3 +2172,55 @@ class FastEMCalibrationBar(StreamBar):
         btn.SetLabel("OK")
         btn.SetForegroundColour(wx.GREEN)
         #btn.SetBitmapSelected(img.getBitmap("icon/ico_checkmark.png"))
+
+
+class FastEMSettingsBar(wx.Panel):
+    """
+    The whole panel containing stream panels and a button to add more streams
+    There are multiple levels of visibility of a stream panel:
+     * the stream panel is shown in the panel and has the visible icon on:
+        The current view is compatible with the stream and has it in its list
+        of streams.
+     * the stream panel is shown in the panel and has the visible icon off:
+        The current view is compatible with the stream, but the stream is not
+        in its list of streams
+     * the stream panel is not present in the panel (hidden):
+        The current view is not compatible with the stream
+    """
+
+    DEFAULT_BORDER = 2
+    DEFAULT_STYLE = wx.BOTTOM | wx.EXPAND
+
+    def __init__(self, *args, **kwargs):
+
+        wx.Panel.__init__(self, *args, **kwargs)
+        add_btn = kwargs.pop('add_button', False)
+        self.stream_panels = []
+
+        #self.SetForegroundColour(gui.FG_COLOUR_EDIT)
+        self.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+
+        self._sz = wx.BoxSizer(wx.VERTICAL)
+        self.SetSizer(self._sz)
+
+        calgrid_sz = wx.GridBagSizer(2, 2)
+
+        txt = wx.StaticText(self, wx.ALL | wx.ALIGN_CENTER_VERTICAL, "Dwell time")
+        cal_ctrl = ComboBox(self, value="200 ns", choices=["100 ns", "200 ns"],
+                            style=wx.CB_READONLY | wx.BORDER_NONE)
+
+
+        calgrid_sz.Add(txt, pos=(0, 0), border=10)
+        calgrid_sz.Add(cal_ctrl, pos=(0, 1))
+
+        txt = wx.StaticText(self, wx.ALL | wx.ALIGN_CENTER, "Beamlet current")
+        cal_ctrl = ComboBox(self, value="10 mA", choices=["100 ns", "200 ns"],
+                            style=wx.CB_READONLY | wx.BORDER_NONE)
+        calgrid_sz.Add(txt, pos=(1, 0))
+        calgrid_sz.Add(cal_ctrl, pos=(1, 1))
+
+        self._sz.Add(calgrid_sz, 1, wx.ALL | wx.ALIGN_CENTER, border=10)
+        self._sz.AddSpacer(10)
+
+
+        self.Layout()

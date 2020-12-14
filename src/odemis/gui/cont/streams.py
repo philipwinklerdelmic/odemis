@@ -32,6 +32,7 @@ import gc
 import locale
 import logging
 import numpy
+import random
 from odemis import model, util
 from odemis.acq.stream import MeanSpectrumProjection
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, \
@@ -2977,7 +2978,7 @@ class SparcStreamsController(StreamBarController):
                 s.useScanStage.value = use
 
 
-class FastEMProjectBarController(StreamBarController):
+class FastEMProjectBarController(object):
     """
     Controls the streams for the SPARC acquisition tab
     In addition to the standard controller it:
@@ -2988,109 +2989,134 @@ class FastEMProjectBarController(StreamBarController):
     Note: tab_data.spotStream should be in tab_data.streams
     """
 
-    def __init__(self, tab_data, project_bar, *args, **kwargs):
-        #super(FastEMProjectController, self).__init__(tab_data, *args, **kwargs)
+    def __init__(self, tab_data, project_bar, view_ctrl):
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
         self._project_bar = project_bar
-        self._addProject("Project 1")
-        self._createAddStreamActions()
 
-    def add_action(self, title, callback, check_enabled=None):
-        pass
+        self._project_bar.btn_add_project.Bind(wx.EVT_BUTTON, self._add_project)
 
-    def _createAddStreamActions(self):
-        """ Create the compatible "add stream" actions according to the current microscope.
+        self._view_ctrl = view_ctrl
 
-        To be executed only once, at initialisation.
-        """
-        main_data = self._main_data_model
-        #self.add_action("New Project", self._addProject)
+        # Always show one project by default
+        self._add_project(None)
 
-        self._project_bar.btn_add_project.Bind(wx.EVT_BUTTON, self._on_add_project)
-
-    def add_action(self, title, callback, check_enabled=None):
-        """ Add an action to the stream menu
-
-        It's added at the end of the list. If an action with the same title exists, it is replaced.
-
-        :param title: (string) Text displayed in the menu
-        :param callback: (callable) function to call when the action is selected
-
-        """
-
-        if self._stream_bar.btn_add_stream is None:
-            logging.error("No add button present!")
-        else:
-            logging.debug("Adding %s action to stream panel", title)
-            self.menu_actions[title] = callback
-            self._stream_bar.btn_add_stream.add_choice(title, callback, check_enabled)
-
-    def _on_add_project(self, evt):
-        self._addProject("Project 1")
-
-    def _addProject(self, name):
-        name = "Project %s" % (len(self._tab_data_model.projects) + 1)
-        p = FastEMProjectController(name, self._tab_data_model, self._project_bar)
-
+    def _add_project(self, evt):
+        name = "Project %s" % (len(self._tab_data_model.projects.value) + 1)
+        p = FastEMProjectController(name, self._project_bar, self._view_ctrl)
 
         # add the stream to the acquisition set
-        self._tab_data_model.projects.append(p)
+        self._tab_data_model.projects.value.append(p)
         return p
-        #
-        # if visible:
-        #     linked_view = None
-        #     if self.ignore_view:  # Always show the stream panel
-        #         show_panel = True
-        #         if not isinstance(add_to_view, bool):
-        #             linked_view = v
-        #     elif self.locked_mode:  # (and don't ignore_view)
-        #         # Show the stream panel iif the view is showing the stream
-        #         show_panel = stream in fview.getStreams()
-        #     else:  # (standard = not locked and don't ignore_view)
-        #         # Show the stream panel iif the view could display the stream
-        #         show_panel = isinstance(stream, fview.stream_classes)
-        #
-        #     stream_cont = self._add_stream_cont(stream,
-        #                                         show_panel,
-        #                                         locked=self.locked_mode,
-        #                                         static=self.static_mode,
-        #                                         view=linked_view,
-        #                                         )
-        #     return stream_cont
-        # return self._add_stream(s, **kwargs)
 
 
 class FastEMProjectController(object):
-    def __init__(self, name, tab_data, project_bar):
+    """
+    Representation of a FastEM project. This class is responsible for the creation and maintenance
+    of ROIs belonging to the project.
+    During initialization, a panel is created and added to the project panel bar.
+
+    Attributes
+    ==========
+    .name (StringVA): name of the project (can be changed by the user)
+    .rois (ListVA of FastEMROIController): list of regions of interest selected for this project
+    """
+
+    def __init__(self, name, project_bar, view_ctrl):
+        """
+        name (str): default name for the project
+        """
         self.name = model.StringVA(name)
         self.rois = model.ListVA([])
+        self.active_selection = model.BooleanVA(False)
 
-        self.panel = FastEMProjectPanel(project_bar, self)
-        project_bar.add_project_panel(self.panel)
-        self.tab_data = tab_data
-        self.panel.btn_roi.Bind(wx.EVT_BUTTON, self._addROI)
+        # Create the panel and add it to the project bar
+        self._panel = FastEMProjectPanel(project_bar, self)
+        project_bar.add_project_panel(self._panel)
 
+        self._view_ctrl = view_ctrl
 
-    def _addROI(self, evt):
-        roi = FastEMROIController(self, self.tab_data, self.panel)
+        self._panel.btn_roi.Bind(wx.EVT_BUTTON, self._on_btn_roi)
+        self._panel._header.btn_remove.Bind(wx.EVT_BUTTON, self._on_btn_remove)
+
+        # Assign random colour for ROIs in viewport
+        # TODO: allow colour selection, show colour in project panel,
+        #  make sure to use "good" colours (easy to see and distinguish from each other)
+        self.colour = "#" + hex(random.randint(0, 2 ** 24 - 1))[2:]  # hex value < 2^24, replace "0x" with "#"
+
+    def _on_btn_roi(self, _):
+        # Select roi area in viewport
+        self.active_selection.value = True
+
+        roa = model.TupleContinuous(acqstream.UNDEFINED_ROI,
+                                         range=((-1, -1, -1, -1), (1, 1, 1, 1)),  #((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         cls=(int, long, float))
+        self._view_ctrl.viewports[0].canvas.add_roa_overlay(roa, self.colour)
+        self.current_roa = roa
+        roa.subscribe(self._add_roi_ctrl)
+
+    def _on_btn_remove(self, _):
+        # Delete panel
+        pass
+        #
+
+    def _add_roi_ctrl(self, roa):
+        roi = FastEMROIController("ROI %s" % len(self.rois.value), roa, None, self._panel, self._view_ctrl)
         self.rois.value.append(roi)
+        self._view_ctrl.viewports[0].canvas.roa_overlay.deactivate()
+        self.current_roa.unsubscribe()
+
 
 
 class FastEMROIController(object):
 
-    def __init__(self, project, tab_data, project_panel):
-        self._tab_data_model = tab_data
-        self._main_data_model = tab_data.main
-        self.project = project
-        self.panel = FastEMROIPanel(project_panel, "ROI %s" % len(self.project.rois.value))
-        project_panel.add_roi_panel(self.panel)
+    def __init__(self, name, coordinates, calibration, project_panel, view_ctrl):
+        self.name = model.StringVA(name)
+
+        # Create ROI panel and add it to the project panel
+        self._panel = FastEMROIPanel(project_panel, name)
+        project_panel.add_roi_panel(self._panel)
+
+        # Create ROI model and add to tab_data
+        self.model = FastEMROI(name, coordinates, calibration)
+
+        self._panel.btn_remove.Bind(wx.EVT_BUTTON, self._on_remove_btn)
 
 
-class FastEMCalibrationController(StreamBarController):
-    """
-    """
 
-    def __init__(self, tab_data, project_bar, *args, **kwargs):
+    def _on_remove_btn(self, _):
+        logging.debug("Removing ROI %s of project %s." % (self.name, self.project))
+        # Remove panel
+        self._panel.Destroy()
+
+        # Remove controller from parent list
         pass
+
+        # Remove overlay
+
+        # Remove subscriptions and references to class
+
+        # Destroy ROIController object
+
+    def _on_new_name(self):
+        pass
+
+    def _on_calibration_sel(self):
+        pass
+
+    def _on_coordinates(self):
+        pass
+
+    def Destroy(self):
+        pass
+
+
+class FastEMCalibrationController(object):
+    """
+    """
+
+    def __init__(self, tab_data, project_bar, view_ctrl, *args, **kwargs):
+        pass
+
+
 
