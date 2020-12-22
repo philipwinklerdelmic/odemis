@@ -1251,21 +1251,17 @@ class FastEMAcquisitionTab(Tab):
         super(FastEMAcquisitionTab, self).__init__(name, button, panel, main_frame, tab_data)
         self.set_label("ACQUISITION")
 
-        viewports = panel.pnl_fastem_grid.viewports
-        assert(isinstance(viewports[0], FastEMAcquisitionViewport))
-
-        # Connect the views
-        # TODO: make them different depending on the hardware available?
-        #       If so, to what? Does having multiple SEM views help?
+        # View Controller
+        # FastEM acquisition tab has a single large viewport, no grid
+        vp = panel.vp_fastem_acqui
+        assert(isinstance(vp, FastEMAcquisitionViewport))
         vpv = collections.OrderedDict([
-            (panel.vp_fastem_acqui,
+            (vp,
              {"name": "Acquisition",
               "cls": guimod.ContentView,  # Center on content (instead of stage)
-              #"stage": main_data.stage,
-              "stream_classes": (EMStream),
+              "stream_classes": EMStream,
               }),
         ])
-
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
         # Create Stream Bar Controller

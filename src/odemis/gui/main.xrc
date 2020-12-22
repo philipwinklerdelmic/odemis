@@ -3622,12 +3622,10 @@
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="ViewportGrid" name="pnl_fastem_grid">
-          <object class="FastEMAcquisitionViewport" name="vp_fastem_acqui">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
+        <object class="FastEMAcquisitionViewport" name="vp_fastem_acqui">
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>

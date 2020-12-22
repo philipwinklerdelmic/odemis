@@ -435,7 +435,6 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         self.pnl_left = xrc.XRCCTRL(self, "pnl_left")
         self.sparc_acq_toolbar = xrc.XRCCTRL(self, "sparc_acq_toolbar")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.pnl_fastem_grid = xrc.XRCCTRL(self, "pnl_fastem_grid")
         self.vp_fastem_acqui = xrc.XRCCTRL(self, "vp_fastem_acqui")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
@@ -4297,12 +4296,10 @@ def __init_resources():
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="ViewportGrid" name="pnl_fastem_grid">
-          <object class="FastEMAcquisitionViewport" name="vp_fastem_acqui">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
+        <object class="FastEMAcquisitionViewport" name="vp_fastem_acqui">
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>
