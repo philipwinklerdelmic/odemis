@@ -2661,3 +2661,112 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         # ctx.line_to(hole_radius_b * 2, hole_pos_b.y)
         # ctx.stroke()
         # END DEBUG Lines Mirror Center
+
+
+class FastEMROIOverlay(RepetitionSelectOverlay):
+    def __init__(self, *args, **kwargs):
+        self.new = True
+        super(FastEMROIOverlay, self).__init__(*args, **kwargs)
+
+
+    def on_left_down(self, evt):
+        # super().on_left_down(evt)
+        # print('fastemoverlay left down')
+        # DragMixin._on_left_down(self, evt)
+        #
+        # if self.left_dragging:
+        #     hover = self.get_hover(self.drag_v_start_pos)
+        #     print('hover %s' % hover)
+        #     if not hover:
+        #
+        #         if self.new:
+        #             self.start_selection()
+        #
+        #         else:
+        #             print('deactivate')
+        #             # Clicked outside selection, so create new selection
+        #             #self.deactivate()
+        #
+        #     elif hover in (gui.HOVER_SELECTION, gui.HOVER_LINE):
+        #         # Clicked inside selection or near line, so start dragging
+        #         self.start_drag()
+        #     else:
+        #         # Clicked on an edit point (e.g. an edge or start or end point), so edit
+        #         self.start_edit(hover)
+        if self.active:
+            #SelectionMixin._on_left_down(self, evt)
+            DragMixin._on_left_down(self, evt)
+
+            if self.left_dragging:
+                hover = self.get_hover(self.drag_v_start_pos)
+
+                if not hover:
+                    # Clicked outside selection, so create new selection
+                    if self.new:
+                        self.start_selection()
+                        self.new = False
+                    else:
+
+                        self.deactivate()
+                elif hover in (gui.HOVER_SELECTION, gui.HOVER_LINE):
+                    # Clicked inside selection or near line, so start dragging
+                    self.start_drag()
+                else:
+                    # Clicked on an edit point (e.g. an edge or start or end point), so edit
+                    self.start_edit(hover)
+
+            self._view_to_phys()
+            self.cnvs.update_drawing()
+        else:
+            WorldOverlay.on_left_down(self, evt)
+        #evt.Skip()
+
+    def on_left_up(self, evt):
+        """ Call this method from the 'on_left_up' method of super classes"""
+        WorldSelectOverlay.on_left_up(self, evt)
+        if self._roa:
+            if self.active:
+                if self.get_size() != (None, None):
+                    phys_rect = self.get_physical_sel()
+                    if self._scanner:
+                        rect = self.convert_roi_phys_to_ratio(phys_rect)
+                    else:
+                        rect = phys_rect
+
+                    # Update VA. We need to unsubscribe to be sure we don't received
+                    # intermediary values as the VA is modified by the stream further on, and
+                    # VA don't ensure the notifications are ordered (so the listener could
+                    # receive the final value, and then our requested ROI value).
+                    self._roa.unsubscribe(self.on_roa)
+                    self._roa.value = rect
+                    self._roa.subscribe(self.on_roa, init=True)
+                else:
+                    self._roa.value = UNDEFINED_ROI
+
+        else:
+            logging.warn("Expected ROA not found!")
+
+        # super().on_left_up(evt)
+        # DragMixin._on_left_up(self, evt)
+        # print('fastem left up')
+        #
+        # if not self.new:
+        #     print('old')
+        #
+        #
+        #
+        # else:
+        #     print('new')
+        #     self.new = False
+        #     # IMPORTANT: The check for selection clearing includes the left drag attribute for the
+        #     # following reason: When the (test) window was maximized by double clicking on the title bar
+        #     # of the window, the second 'mouse up' event would be processed by the overlay, causing it
+        #     # to clear any selection. Check for `left_dragging` makes sure that the mouse up is always
+        #     # paired with on of our own mouse downs.
+        #     import odemis
+        #     if self.selection_mode == odemis.gui.comp.overlay.base.SEL_MODE_NONE and self.left_dragging:
+        #         self.clear_selection()
+        #
+        #     else:  # Editing an existing selection
+        #         self.stop_selection()
+        # evt.Skip()

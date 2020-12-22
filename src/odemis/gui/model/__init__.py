@@ -1012,8 +1012,13 @@ class FastEMROI(object):
     """ Representation of a FastEM ROI. """
     def __init__(self, name, coordinates, calibration):
         self.name = model.StringVA(name)
-        self.coordinates = model.TupleContinuous(coordinates)
-        self.calibration = model.IntVA(calibration)
+        self.coordinates = coordinates #model.TupleContinuous(coordinates,
+                                                 #range=((-1e6, -1e6, -1e6, -1e6), (1e6, 1e6, 1e6, 1e6)),
+                                                 # ((0, 0, 0, 0), (1, 1, 1, 1)),
+                                                # cls=(int, long, float)
+                                                # )
+        if calibration:
+            self.calibration = model.IntVA(calibration)
 
 
 class FileInfo(object):

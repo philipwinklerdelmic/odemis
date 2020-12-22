@@ -1760,7 +1760,7 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         DblMicroscopeCanvas.__init__(self, *args, **kwargs)
         # Overlay that listens to left click for ROI selection
-        self.main_overlay = world_overlay.WorldSelectOverlay(self)
+        #self.main_overlay = world_overlay.WorldSelectOverlay(self)
         self.roa_overlays = []
 
     def setView(self, view, tab_data):
@@ -1769,7 +1769,7 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
 
     def add_roa_overlay(self, roa, colour=gui.SELECTION_COLOUR):
 
-        self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, roa, colour=colour)
+        self.roa_overlay = world_overlay.FastEMROIOverlay(self, roa, colour=colour)
         self.roa_overlay.deactivate()
         self.add_world_overlay(self.roa_overlay)
         self.roa_overlays.append(self.roa_overlay)
@@ -1778,20 +1778,39 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
 
     def on_left_up(self, evt):
         """ End the dragging procedure """
-
+        logging.error('up')
         # If a ROI is selected
         roi = self._get_roi_from_pos(evt.Position)
         if roi:
             roi.overlay.activate()
+            # TODO: change border
+        else:
+            [[roi.overlay.deactivate() for roi in p.rois.value] for p in self._projects.value]
+        logging.error(roi)
+        #self.reset_default_cursor()
 
 
         # If the canvas was being dragged
         super(FastEMAcquisitionCanvas, self).on_left_up(evt)
 
     def _get_roi_from_pos(self, pos):
-        roi = None
+        logging.error(pos)
+        #logging.error([[roi.value for roi in p.rois.value] for p in self._projects.value])
         for p in self._projects.value:
             for r in p.rois.value:
-                if
+                logging.error(r.model.coordinates.value)
+                if self._is_pos_in_rect(pos, r.model.coordinates.value):
+                    return r
 
-        return roi
+        return None
+
+    def _is_pos_in_rect(self, pos, rect):
+        """rect (tuple of 4 floats): l, t, r, b positions in m"""
+
+        l, t, r, b = rect
+        x, y = self.view_to_phys(pos, self.get_half_buffer_size())
+        logging.error("%s, %s" % ((x,y), rect))
+        if l <= x <= r and t <= y <= b:
+            return True
+        else:
+            return False

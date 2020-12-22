@@ -938,7 +938,7 @@ class SelectionMixin(DragMixin):
 
     def _on_left_down(self, evt):
         """ Call this method from the 'on_left_down' method of super classes """
-
+        print('left down mixin')
         DragMixin._on_left_down(self, evt)
 
         if self.left_dragging:
@@ -958,7 +958,7 @@ class SelectionMixin(DragMixin):
         """ Call this method from the 'on_left_up' method of super classes"""
 
         DragMixin._on_left_up(self, evt)
-
+        print('selectionmixin left up')
         # IMPORTANT: The check for selection clearing includes the left drag attribute for the
         # following reason: When the (test) window was maximized by double clicking on the title bar
         # of the window, the second 'mouse up' event would be processed by the overlay, causing it

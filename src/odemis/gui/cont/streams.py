@@ -3006,6 +3006,7 @@ class FastEMProjectBarController(object):
         p = FastEMProjectController(name, self._project_bar, self._view_ctrl)
 
         # add the stream to the acquisition set
+        logging.error("appending projects")
         self._tab_data_model.projects.value.append(p)
         return p
 
@@ -3049,9 +3050,10 @@ class FastEMProjectController(object):
         self.active_selection.value = True
 
         roa = model.TupleContinuous(acqstream.UNDEFINED_ROI,
-                                         range=((-1, -1, -1, -1), (1, 1, 1, 1)),  #((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         range=((-1e6, -1e6, -1e6, -1e6), (1e6, 1e6, 1e6, 1e6)),  #((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, long, float))
         self._view_ctrl.viewports[0].canvas.add_roa_overlay(roa, self.colour)
+        logging.error('overlay done')
         self.current_roa = roa
         roa.subscribe(self._add_roi_ctrl)
 
@@ -3061,10 +3063,10 @@ class FastEMProjectController(object):
         #
 
     def _add_roi_ctrl(self, roa):
-        roi = FastEMROIController("ROI %s" % len(self.rois.value), roa, None, self._panel, self._view_ctrl)
-        self.rois.value.append(roi)
-        self._view_ctrl.viewports[0].canvas.roa_overlay.deactivate()
-        self.current_roa.unsubscribe()
+        roi = FastEMROIController("ROI %s" % len(self.rois.value), self.current_roa, None, self._panel, self._view_ctrl)
+        self.rois.value.append(roi)  # roi.model
+        self.current_roa.unsubscribe(self._add_roi_ctrl)
+        self.active_selection.value = False
 
 
 
@@ -3078,10 +3080,11 @@ class FastEMROIController(object):
         project_panel.add_roi_panel(self._panel)
 
         # Create ROI model and add to tab_data
-        self.model = FastEMROI(name, coordinates, calibration)
+        self.model = guimodel.FastEMROI(name, coordinates, calibration)
 
         self._panel.btn_remove.Bind(wx.EVT_BUTTON, self._on_remove_btn)
-
+        self.overlay = view_ctrl.viewports[0].canvas.roa_overlay
+        self.overlay.deactivate()
 
 
     def _on_remove_btn(self, _):

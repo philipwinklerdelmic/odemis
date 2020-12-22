@@ -1450,7 +1450,7 @@ class DraggableCanvas(BitmapCanvas):
 
     def on_left_up(self, evt):
         """ End the dragging procedure """
-
+        print('left up canvas')
         # If the canvas was being dragged
         if self._ldragging:
             self._ldragging = False
