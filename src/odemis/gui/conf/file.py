@@ -511,3 +511,54 @@ class CalibrationConfig(Config):
 
         return None
 
+class FastEMConfig(Config):
+    file_name = "fastem.config"
+
+    def __init__(self):
+        super(FastEMConfig, self).__init__()
+
+        # Define the default settings
+        self.default.add_section("acquisition")
+        # TODO: put right default values
+        self.default.set("acquisition", "storage_path", ACQUI_PATH)
+        self.default.set("acquisition", "calib_region_size", (1e-6, 1e-6))
+        self.default.set("acquisition", "calib_region_positions", ((-1e-6, -1e-6), (0e-6, -1e-6), (1e-6, -1e-6),
+                                                                   (-1e-6, 0e-6), (0e-6, 0e-6), (1e-6, 0e-6),
+                                                                   (-1e-6, 1e-6), (0e-6, 1e-6), (1e-6, 1e-6)))
+        self.default.set("acquisition", "default_image_path", None)
+
+    @property
+    def storage_path(self):
+        lp = self.get("acquisition", "storage_path")
+        # Check that it can be accessed (will be on external server in general). If not, raise exception.
+        if not os.path.isdir(lp):
+            raise IOError("Cannot find storage path: %s" % lp)
+        return lp
+
+    @property
+    def calib_region_size(self):
+        lp = self.get("acquisition", "calib_region_size")
+        # Check that it can be accessed (will be on external server in general). If not, raise exception.
+        if not os.path.isdir(lp):
+            raise IOError("Cannot find storage path: %s" % lp)
+        return lp
+
+    @property
+    def calib_region_positions(self):
+        """
+        returns (tuple of 9x (float, float)): default x, y position for each of the 9 calibration regions
+            (starting with region 1, typically bottom right)
+        """
+        lp = self.get("acquisition", "calib_region_positions")
+        # Check that it can be accessed (will be on external server in general). If not, raise exception.
+        if not os.path.isdir(lp):
+            raise IOError("Cannot find storage path: %s" % lp)
+        return lp
+
+    @property
+    def default_image_path(self):
+        lp = self.get("acquisition", "default_image_path")
+        # Check that it can be accessed (will be on external server in general). If not, raise exception.
+        if not os.path.isdir(lp):
+            raise IOError("Cannot find storage path: %s" % lp)
+        return lp

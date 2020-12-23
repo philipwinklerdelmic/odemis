@@ -2054,10 +2054,10 @@ class FastEMROIPanel(wx.Panel):
         self.btn_remove.Bind(wx.EVT_BUTTON, self._on_remove_btn)
 
         # Combobox to select calibration
-        cal_ctrl = ComboBox(self, value="Calibration 0", choices=["Calibration 0", "Calibration 1"], size=(100, -1),
+        self.cal_ctrl = ComboBox(self, value="Calibration 0", choices=["Calibration 0", "Calibration 1"], size=(100, -1),
                           style=wx.CB_READONLY | wx.BORDER_NONE)
         # TODO: don't highlight text
-        self._add_ctrl(cal_ctrl)
+        self._add_ctrl(self.cal_ctrl)
 
         # Fit sizer
         #self._sz.Add((260, 1), 0)
@@ -2067,6 +2067,15 @@ class FastEMROIPanel(wx.Panel):
         self.Layout()
         self.parent.Refresh()
 
+    def activate(self):
+        self.SetBackgroundColour(gui.BG_COLOUR_STREAM)
+        self.txt_ctrl.SetBackgroundColour(gui.BG_COLOUR_STREAM)
+        self.cal_ctrl.SetBackgroundColour(gui.BG_COLOUR_STREAM)
+
+    def deactivate(self):
+        self.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+        self.txt_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+        self.cal_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
 
     def _add_remove_btn(self):
         """ Add a button for ROI removal """
@@ -2146,14 +2155,14 @@ class FastEMCalibrationBar(StreamBar):
         self._sz = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self._sz)
 
+        self.buttons = {}
         # Calibration Grid
         calgrid_sz = wx.GridBagSizer(3, 3)
-        for i, lbl in enumerate(["0", "1", "2", "3", "4", "5", "6", "7", "8"]):  #enumerate(["A", "B", "C", "D", "E", "F", "G", "H", "I"]):
+        for i, lbl in enumerate([str(i) for i in range(9, 0, -1)]):  #["0", "1", "2", "3", "4", "5", "6", "7", "8"]):  #enumerate(["A", "B", "C", "D", "E", "F", "G", "H", "I"]):
             subsz = wx.BoxSizer(wx.HORIZONTAL)
             btn = wx.Button(self, wx.ALL | wx.ALIGN_CENTER, label="?", size=(30, 30))
             #btn = buttons.ImageButton(self, bitmap=img.getBitmap("menu/btn_checkmark2.png"), size=(30, 30))
             btn.SetBackgroundColour("#999999")
-            btn.Bind(wx.EVT_BUTTON, self.on_button)
             subsz.Add(btn)
             subsz.AddSpacer(8)
 
@@ -2162,16 +2171,14 @@ class FastEMCalibrationBar(StreamBar):
             subsz.Add(txt, wx.LEFT | wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, 5)
             subsz.AddSpacer(20)
 
+            self.buttons[int(lbl)] = btn
+
         self._sz.Add(calgrid_sz, 0, wx.ALL | wx.ALIGN_CENTER, 10)
         self._sz.AddSpacer(10)
 
         self.txt_no_stream = wx.StaticText(self, -1, "")
 
-    def on_button(self, evt):
-        btn = evt.GetEventObject()
-        btn.SetLabel("OK")
-        btn.SetForegroundColour(wx.GREEN)
-        #btn.SetBitmapSelected(img.getBitmap("icon/ico_checkmark.png"))
+
 
 
 class FastEMSettingsBar(wx.Panel):

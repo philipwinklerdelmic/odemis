@@ -2667,7 +2667,20 @@ class FastEMROIOverlay(RepetitionSelectOverlay):
     def __init__(self, *args, **kwargs):
         self.new = True
         super(FastEMROIOverlay, self).__init__(*args, **kwargs)
+        self.line_width = 2
 
+    def activate(self):
+        #self.activate()
+        if not self.selection_mode == SEL_MODE_CREATE:
+            self.line_width = 10
+            self.cnvs.request_drawing_update()#self.cnvs.draw()
+        super(FastEMROIOverlay, self).activate()
+
+    def deactivate(self):
+        #self.deactivate()
+        self.line_width = 2
+        self.cnvs.request_drawing_update()#self.cnvs.draw()
+        super(FastEMROIOverlay, self).deactivate()
 
     def on_left_down(self, evt):
         # super().on_left_down(evt)
@@ -2770,3 +2783,248 @@ class FastEMROIOverlay(RepetitionSelectOverlay):
         #     else:  # Editing an existing selection
         #         self.stop_selection()
         # evt.Skip()
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        """ Draw the selection as a rectangle """
+        if self.p_start_pos and self.p_end_pos:
+
+            # FIXME: The following version of the code does not work. Update_projection is causing
+            # the start position to be drawn at the top left of the buffer and the calculation of
+            # the edges is all wrong.
+
+            # translate the origin to the middle of the buffer
+            # ctx.translate(*self.offset_b)
+            #
+            # # Important: We need to use the physical positions, in order to draw everything at the
+            # # right scale.
+            # b_start_pos = self.cnvs.phys_to_buffer(self.p_start_pos)
+            # b_end_pos = self.cnvs.phys_to_buffer(self.p_end_pos)
+            # b_start_pos, b_end_pos = self._normalize_rect(b_start_pos, b_end_pos)
+
+            # Important: We need to use the physical positions, in order to draw
+            # everything at the right scale.
+            offset = self.cnvs.get_half_buffer_size()
+            b_start_pos = self.cnvs.phys_to_buffer(self.p_start_pos, offset)
+            b_end_pos = self.cnvs.phys_to_buffer(self.p_end_pos, offset)
+            b_start_pos, b_end_pos = self._normalize_rect(b_start_pos, b_end_pos)
+
+            self.update_projection(b_start_pos, b_end_pos, (shift[0], shift[1], scale))
+
+            # logging.warn("%s %s", shift, phys_to_buffer_pos(shift))
+            rect = (b_start_pos.x,
+                    b_start_pos.y,
+                    b_end_pos.x - b_start_pos.x,
+                    b_end_pos.y - b_start_pos.y)
+
+            # draws a light black background for the rectangle
+            ctx.set_line_width(4)
+            ctx.set_source_rgba(0, 0, 0, 0.5)
+            ctx.rectangle(*rect)
+            ctx.stroke()
+
+            # draws the dotted line
+            ctx.set_line_width(self.line_width)
+            ctx.set_dash([2])
+            ctx.set_line_join(cairo.LINE_JOIN_MITER)
+            ctx.set_source_rgba(*self.colour)
+            ctx.rectangle(*rect)
+            ctx.stroke()
+
+            self._debug_draw_edges(ctx, True)
+
+            # Label
+            if (self.selection_mode in (SEL_MODE_EDIT, SEL_MODE_CREATE) and
+                    self.cnvs.view):
+                w, h = (abs(s - e) for s, e in zip(self.p_start_pos, self.p_end_pos))
+                w = units.readable_str(w, 'm', sig=2)
+                h = units.readable_str(h, 'm', sig=2)
+                size_lbl = u"{} x {}".format(w, h)
+
+                pos = Vec(b_end_pos.x - 8, b_end_pos.y + 5)
+
+                self.position_label.pos = pos
+                self.position_label.text = size_lbl
+                self._write_labels(ctx)
+
+
+class FastEMCalibrationOverlay(RepetitionSelectOverlay):
+    def __init__(self, cv, roa, *args, **kwargs):
+        self.new = True
+        super(FastEMCalibrationOverlay, self).__init__(cv, roa, *args, **kwargs)
+        self.line_width = 2
+        self.num = 1
+        #self.select_v_start_pos = roa.value[0], roa.value[2]
+        #elf.select_v_end_pos = roa.value[1], roa.value[3]
+        self.set_physical_sel(roa.value)
+        self._roa = roa
+
+    def activate(self):
+        #self.activate()
+        if not self.selection_mode == SEL_MODE_CREATE:
+            self.line_width = 10
+            self.cnvs.request_drawing_update()#self.cnvs.draw()
+        super(FastEMCalibrationOverlay, self).activate()
+
+    def deactivate(self):
+        #self.deactivate()
+        self.line_width = 2
+        self.cnvs.request_drawing_update()#self.cnvs.draw()
+        super(FastEMCalibrationOverlay, self).deactivate()
+
+    def on_left_down(self, evt):
+        # super().on_left_down(evt)
+        # print('fastemoverlay left down')
+        # DragMixin._on_left_down(self, evt)
+        #
+        # if self.left_dragging:
+        #     hover = self.get_hover(self.drag_v_start_pos)
+        #     print('hover %s' % hover)
+        #     if not hover:
+        #
+        #         if self.new:
+        #             self.start_selection()
+        #
+        #         else:
+        #             print('deactivate')
+        #             # Clicked outside selection, so create new selection
+        #             #self.deactivate()
+        #
+        #     elif hover in (gui.HOVER_SELECTION, gui.HOVER_LINE):
+        #         # Clicked inside selection or near line, so start dragging
+        #         self.start_drag()
+        #     else:
+        #         # Clicked on an edit point (e.g. an edge or start or end point), so edit
+        #         self.start_edit(hover)
+        # if self.active:
+        #     #SelectionMixin._on_left_down(self, evt)
+        #     DragMixin._on_left_down(self, evt)
+        #
+        #     if self.left_dragging:
+        #         hover = self.get_hover(self.drag_v_start_pos)
+        #
+        #         if not hover:
+        #             self.deactivate()
+        #         elif hover in (gui.HOVER_SELECTION, gui.HOVER_LINE):
+        #             # Clicked inside selection or near line, so start dragging
+        #             self.start_drag()
+        #         else:
+        #             # Clicked on an edit point (e.g. an edge or start or end point), so edit
+        #             #self.start_edit(hover)
+        #             pass
+        #
+        #     #self._view_to_phys()
+        #     self.cnvs.update_drawing()
+        # else:
+        #    WorldOverlay.on_left_down(self, evt)
+        evt.Skip()
+
+    def on_left_up(self, evt):
+        """ Call this method from the 'on_left_up' method of super classes"""
+        WorldSelectOverlay.on_left_up(self, evt)
+        # if self._roa:
+        #     if self.active:
+        #         if self.get_size() != (None, None):
+        #             phys_rect = self.get_physical_sel()
+        #             if self._scanner:
+        #                 rect = self.convert_roi_phys_to_ratio(phys_rect)
+        #             else:
+        #                 rect = phys_rect
+        #
+        #             # Update VA. We need to unsubscribe to be sure we don't received
+        #             # intermediary values as the VA is modified by the stream further on, and
+        #             # VA don't ensure the notifications are ordered (so the listener could
+        #             # receive the final value, and then our requested ROI value).
+        #             self._roa.unsubscribe(self.on_roa)
+        #             self._roa.value = rect
+        #             self._roa.subscribe(self.on_roa, init=True)
+        #         else:
+        #             self._roa.value = UNDEFINED_ROI
+        #
+        # else:
+        #     logging.warn("Expected ROA not found!")
+
+        # super().on_left_up(evt)
+        # DragMixin._on_left_up(self, evt)
+        # print('fastem left up')
+        #
+        # if not self.new:
+        #     print('old')
+        #
+        #
+        #
+        # else:
+        #     print('new')
+        #     self.new = False
+        #     # IMPORTANT: The check for selection clearing includes the left drag attribute for the
+        #     # following reason: When the (test) window was maximized by double clicking on the title bar
+        #     # of the window, the second 'mouse up' event would be processed by the overlay, causing it
+        #     # to clear any selection. Check for `left_dragging` makes sure that the mouse up is always
+        #     # paired with on of our own mouse downs.
+        #     import odemis
+        #     if self.selection_mode == odemis.gui.comp.overlay.base.SEL_MODE_NONE and self.left_dragging:
+        #         self.clear_selection()
+        #
+        #     else:  # Editing an existing selection
+        #         self.stop_selection()
+        # evt.Skip()
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        """ Draw the selection as a rectangle """
+        if self.p_start_pos and self.p_end_pos:
+            print('drawing')
+            # FIXME: The following version of the code does not work. Update_projection is causing
+            # the start position to be drawn at the top left of the buffer and the calculation of
+            # the edges is all wrong.
+
+            # translate the origin to the middle of the buffer
+            # ctx.translate(*self.offset_b)
+            #
+            # # Important: We need to use the physical positions, in order to draw everything at the
+            # # right scale.
+            # b_start_pos = self.cnvs.phys_to_buffer(self.p_start_pos)
+            # b_end_pos = self.cnvs.phys_to_buffer(self.p_end_pos)
+            # b_start_pos, b_end_pos = self._normalize_rect(b_start_pos, b_end_pos)
+
+            # Important: We need to use the physical positions, in order to draw
+            # everything at the right scale.
+            offset = self.cnvs.get_half_buffer_size()
+            b_start_pos = self.cnvs.phys_to_buffer(self.p_start_pos, offset)
+            b_end_pos = self.cnvs.phys_to_buffer(self.p_end_pos, offset)
+            b_start_pos, b_end_pos = self._normalize_rect(b_start_pos, b_end_pos)
+
+            self.update_projection(b_start_pos, b_end_pos, (shift[0], shift[1], scale))
+
+            # logging.warn("%s %s", shift, phys_to_buffer_pos(shift))
+            rect = (b_start_pos.x,
+                    b_start_pos.y,
+                    b_end_pos.x - b_start_pos.x,
+                    b_end_pos.y - b_start_pos.y)
+            print(rect)
+            # draws a light black background for the rectangle
+            ctx.set_line_width(4)
+            ctx.set_source_rgba(0, 0, 0, 0.5)
+            ctx.rectangle(*rect)
+            ctx.stroke()
+
+            # draws the dotted line
+            ctx.set_line_width(self.line_width)
+            #ctx.set_dash([2])
+            ctx.set_line_join(cairo.LINE_JOIN_MITER)
+            ctx.set_source_rgba(*self.colour)
+            ctx.rectangle(*rect)
+            ctx.stroke()
+
+            self._debug_draw_edges(ctx, True)
+
+            # Label
+
+            w, h = (abs(s - e) for s, e in zip(self.p_start_pos, self.p_end_pos))
+            w = units.readable_str(w, 'm', sig=2)
+            h = units.readable_str(h, 'm', sig=2)
+            size_lbl = u"{} x {}".format(w, h)
+
+            pos = Vec(b_end_pos.x - 8, b_end_pos.y + 5)
+
+            self.position_label.pos = pos
+            self.position_label.text = "%s" % self.num
+            self._write_labels(ctx)

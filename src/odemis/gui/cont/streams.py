@@ -3088,6 +3088,13 @@ class FastEMROIController(object):
         self.overlay = view_ctrl.viewports[0].canvas.roa_overlay
         self.overlay.deactivate()
 
+    def activate(self):
+        self.overlay.activate()
+        self._panel.activate()
+
+    def deactivate(self):
+        self.overlay.deactivate()
+        self._panel.deactivate()
 
     def _on_remove_btn(self, _):
         #logging.debug("Removing ROI %s of project %s." % (self.name, self.project))
@@ -3124,8 +3131,35 @@ class FastEMCalibrationController(object):
     """
     """
 
-    def __init__(self, tab_data, project_bar, view_ctrl, *args, **kwargs):
-        pass
+    def __init__(self, tab_data, calib_bar, view_ctrl, *args, **kwargs):
 
+        self.size = tab_data.calib_region_size
+        self.positions = tab_data.calib_region_positions
+        for btn in calib_bar.buttons.values():
+            btn.Bind(wx.EVT_BUTTON, self.on_button)
+
+        self._view_ctrl = view_ctrl
+        self.calib_bar = calib_bar
+
+
+    def on_button(self, evt):
+        btn = evt.GetEventObject()
+        btn.SetLabel("OK")
+        btn.SetForegroundColour(wx.GREEN)
+        # btn.SetBitmapSelected(img.getBitmap("icon/ico_checkmark.png"))
+
+        num = [num for num, b in self.calib_bar.buttons.items() if b == btn][0]
+        self.add_calib_region(num)
+        #self.view_ctrl.add_world_overlay()
+
+    def add_calib_region(self, num):
+        # Add calibration overlay to viewport, save position in attribute. No extra class necessary (unlike ROI)
+        l = self.positions[num][0] - 0.5 * self.size[0]
+        t = self.positions[num][1] - 0.5 * self.size[1]
+        r = self.positions[num][0] + 0.5 * self.size[0]
+        b = self.positions[num][1] + 0.5 * self.size[1]
+        roi = model.TupleContinuous((l, t, r, b), range=((-1e6, -1e6, -1e6, -1e6), (1e6, 1e6, 1e6, 1e6)),  #((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         cls=(int, long, float))
+        self._view_ctrl.viewports[0].canvas.add_calibration_overlay(roi)
 
 

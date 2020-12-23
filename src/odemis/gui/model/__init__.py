@@ -1004,6 +1004,9 @@ class FastEMAcquisitionGUIData(AnalysisGUIData):
         self.calibrationStreams = {}
         self.projects = model.ListVA()  # list of FastEMProject
 
+        self.calib_region_size = (1e-6, 1e-6)
+        self.calib_region_positions = {1: (-10e-6, -10e-6)}
+
 
 class FastEMProject(object):
     """ Representation of a FastEM project. """
