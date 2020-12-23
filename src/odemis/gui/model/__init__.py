@@ -978,7 +978,7 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         self.polePositionPhysical.notify(posphy)
 
 
-class FastEMAcquisitionGUIData(MicroscopyGUIData):
+class FastEMAcquisitionGUIData(AnalysisGUIData):
     """ Represent an interface used to select a precise area to scan and
     acquire signal. It allows fine control of the shape and density of the scan.
     It is specifically made for the SPARC system.
@@ -986,16 +986,20 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
 
     def __init__(self, main):
         assert main.microscope is not None
-        MicroscopyGUIData.__init__(self, main)
+        super(FastEMAcquisitionGUIData, self).__init__(main)
 
 
         # List of streams to be acquired (as the ones used to display the live
         # view are different)
-        self.acquisitionStreams = set()
+        from odemis.util.dataio import data_to_static_streams, open_acquisition
+        d = open_acquisition("/home/philip/Downloads/grid.tiff")
+        s = data_to_static_streams(d)
+        self.streams.value.append(s[0])
+        self.acquisitionStreams = set(s)
 
         #
         self.overviewStream = None
-        self.semStream = None
+        self.semStream = s[0]
 
         self.calibrationStreams = {}
         self.projects = model.ListVA()  # list of FastEMProject

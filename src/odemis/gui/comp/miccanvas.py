@@ -1755,7 +1755,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
 
 class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
-    """ Canvas for FastEM Acquisition tab, similar to DblMicroscopeCanvas, but can contain multiple roa overlays. """
+    """ Canvas for FastEM acquisition tab, similar to DblMicroscopeCanvas, but can contain multiple roa overlays. """
 
     def __init__(self, *args, **kwargs):
         DblMicroscopeCanvas.__init__(self, *args, **kwargs)
@@ -1764,8 +1764,32 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
         self.roa_overlays = []
 
     def setView(self, view, tab_data):
-        # Keep reference to tab_data
+        # Keep reference to projects
         self._projects = tab_data.projects
+
+        self.view = view
+        self._tab_data_model = tab_data
+
+        self.view.mpp.subscribe(self._on_view_mpp, init=True)
+        self.view.view_pos.subscribe(self._onViewPos)
+        # Update new position immediately, so that fit_to_content() directly
+        # gets the correct center
+        phys_pos = self.view.view_pos.value
+        self._calc_bg_offset(phys_pos)
+        self.requested_phys_pos = tuple(phys_pos)
+
+        # any image changes
+        self.view.lastUpdate.subscribe(self._on_view_image_update, init=True)
+
+        # handle cross hair
+        self.view.show_crosshair.subscribe(self._on_cross_hair_show, init=True)
+
+        self.view.interpolate_content.subscribe(self._on_interpolate_content, init=True)
+
+        self.view.show_pixelvalue.subscribe(self._on_pixel_value_show, init=True)
+
+        tab_data.main.debug.subscribe(self._on_debug, init=True)
+
 
     def add_roa_overlay(self, roa, colour=gui.SELECTION_COLOUR):
 
@@ -1775,6 +1799,9 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
         self.roa_overlays.append(self.roa_overlay)
         self.roa_overlay.activate()
 
+    def remove_roa_overlay(self, overlay):
+        self.roa_overlays.remove(overlay)
+        self.remove_world_overlay(overlay)
 
     def on_left_up(self, evt):
         """ End the dragging procedure """

@@ -867,7 +867,7 @@ class FastEMAcquiController(object):
     tab.
     """
 
-    def __init__(self, tab_data, tab_panel, streambar_controller):
+    def __init__(self, tab_data, tab_panel, streambar_controller, calibrationbar_controller):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
         tab_panel: (wx.Frame): the frame which contains the 4 viewports
@@ -899,6 +899,7 @@ class FastEMAcquiController(object):
         self.acq_future = None
         self.gauge_acq = self._tab_panel.gauge_sparc_acq
         self.lbl_acqestimate = self._tab_panel.lbl_sparc_acq_estimate
+        self.txt_num_rois = self._tab_panel.txt_num_rois
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
         self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
         self._acq_future_connector = None
@@ -929,6 +930,13 @@ class FastEMAcquiController(object):
         # Listen to preparation state
         self._main_data_model.is_preparing.subscribe(self.on_preparation)
 
+        tab_data.projects.subscribe(self._on_projects)
+        for p in tab_data.projects.value:
+            p.rois.subscribe(self._on_project)
+
+        self.roi_count = 0
+
+
     def __del__(self):
         self._executor.shutdown(wait=False)
 
@@ -953,6 +961,16 @@ class FastEMAcquiController(object):
         """ updates the acquire button according to the acquisition ROI """
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
+
+    def _on_projects(self, l):
+        for p in l:
+            p.rois.subscribe(self._on_project)
+
+    def _on_project(self, p):
+        self.display_roi_count()
+        #self.check_acquire_button()
+        self.update_acquisition_time()  # to update the message
+
 
     def on_preparation(self, is_preparing):
         self.check_acquire_button()
@@ -1013,7 +1031,12 @@ class FastEMAcquiController(object):
 
     @wxlimit_invocation(1) # max 1/s
     def update_acquisition_time(self):
-        pass
+        if self.roi_count == 0:
+            self.lbl_acqestimate.SetLabel("No region of interest selected.")
+        # if calibration not there
+        else:
+            self.lbl_acqestimate.SetLabel("")
+
         # if self._ellipsis_animator:
         #     # cancel if there is an ellipsis animator updating the status message
         #     self._ellipsis_animator.cancel()
@@ -1044,6 +1067,18 @@ class FastEMAcquiController(object):
         # logging.debug("Updating status message %s, with level %s", txt, lvl)
         # self.lbl_acqestimate.SetLabel(txt)
         # self._show_status_icons(lvl)
+
+    @wxlimit_invocation(1)  # max 1/s
+    def display_roi_count(self):
+        l = 0
+        print('wofijewfjio')
+        for p in self._tab_data_model.projects.value:
+            for roi in p.rois.value:
+                l += 1
+        print(l)
+        self.txt_num_rois.SetValue("%s" % l)
+        self._tab_panel.Layout()
+        self.roi_count = l
 
     def _show_status_icons(self, lvl):
         # update status icon to show the logging level
@@ -1129,7 +1164,7 @@ class FastEMAcquiController(object):
             raise NotImplementedError("Cannot save temporal data in %s format, data format must be HDF5." \
                                       % self.conf.last_format)
 
-        self._pause_streams()
+        #self._pause_streams()
 
         self.btn_acquire.Disable()
         self.btn_cancel.Enable()
@@ -1141,11 +1176,12 @@ class FastEMAcquiController(object):
         self._tab_panel.Layout()  # to put the gauge at the right place
 
         # start acquisition + connect events to callback
-        self.acq_future = acqmng.acquire(self._tab_data_model.acquisitionStreams, self._main_data_model.settings_obs)
-        self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
-                                                                self.gauge_acq,
-                                                                self.lbl_acqestimate)
-        self.acq_future.add_done_callback(self.on_acquisition_done)
+        #
+        # self.acq_future = acqmng.acquire(self._tab_data_model.acquisitionStreams, self._main_data_model.settings_obs)
+        # self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
+        #                                                         self.gauge_acq,
+        #                                                         self.lbl_acqestimate)
+        # self.acq_future.add_done_callback(self.on_acquisition_done)
 
     def on_cancel(self, evt):
         """

@@ -3063,7 +3063,7 @@ class FastEMProjectController(object):
         #
 
     def _add_roi_ctrl(self, roa):
-        roi = FastEMROIController("ROI %s" % len(self.rois.value), self.current_roa, None, self._panel, self._view_ctrl)
+        roi = FastEMROIController("ROI %s" % len(self.rois.value), self.current_roa, None, self, self._view_ctrl)
         self.rois.value.append(roi)  # roi.model
         self.current_roa.unsubscribe(self._add_roi_ctrl)
         self.active_selection.value = False
@@ -3072,30 +3072,36 @@ class FastEMProjectController(object):
 
 class FastEMROIController(object):
 
-    def __init__(self, name, coordinates, calibration, project_panel, view_ctrl):
+    def __init__(self, name, coordinates, calibration, project, view_ctrl):
         self.name = model.StringVA(name)
 
         # Create ROI panel and add it to the project panel
-        self._panel = FastEMROIPanel(project_panel, name)
-        project_panel.add_roi_panel(self._panel)
+        self._panel = FastEMROIPanel(project._panel, name)
+        project._panel.add_roi_panel(self._panel)
 
+        self.project = project
         # Create ROI model and add to tab_data
         self.model = guimodel.FastEMROI(name, coordinates, calibration)
 
+        self._view_ctrl = view_ctrl
         self._panel.btn_remove.Bind(wx.EVT_BUTTON, self._on_remove_btn)
         self.overlay = view_ctrl.viewports[0].canvas.roa_overlay
         self.overlay.deactivate()
 
 
     def _on_remove_btn(self, _):
-        logging.debug("Removing ROI %s of project %s." % (self.name, self.project))
+        #logging.debug("Removing ROI %s of project %s." % (self.name, self.project))
         # Remove panel
         self._panel.Destroy()
 
         # Remove controller from parent list
-        pass
+        self.project.rois.value.remove(self)
 
         # Remove overlay
+        self._view_ctrl.viewports[0].canvas.remove_roa_overlay(self.overlay)
+
+        # Remove model
+
 
         # Remove subscriptions and references to class
 

@@ -1247,12 +1247,32 @@ class SparcAcquisitionTab(Tab):
 
 class FastEMAcquisitionTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
+
+        # During creation, the following controllers are created:
+        #
+        # ViewPortController
+        #   Processes the given viewports by creating views for them, and
+        #   assigning them to their viewport.
+        #
+        # StreamBarController
+        #   Keeps track of the available streams, which are all static
+        #
+        # ViewButtonController
+        #   Connects the views to their thumbnails and show the right one(s)
+        #   based on the model.
+        #
+        # In the `load_data` method the file data is loaded using the
+        # appropriate converter. It's then passed on to the `display_new_data`
+        # method, which analyzes which static streams need to be created. The
+        # StreamController is then asked to create the actual stream object and
+        # it also adds them to every view which supports that (sub)type of
+        # stream.
+
         tab_data = guimod.FastEMAcquisitionGUIData(main_data)
         super(FastEMAcquisitionTab, self).__init__(name, button, panel, main_frame, tab_data)
         self.set_label("ACQUISITION")
 
         # View Controller
-        # FastEM acquisition tab has a single large viewport, no grid
         vp = panel.vp_fastem_acqui
         assert(isinstance(vp, FastEMAcquisitionViewport))
         vpv = collections.OrderedDict([
@@ -1260,66 +1280,59 @@ class FastEMAcquisitionTab(Tab):
              {"name": "Acquisition",
               "cls": guimod.ContentView,  # Center on content (instead of stage)
               "stream_classes": EMStream,
+              "zPos": self.tab_data_model.zPos,
               }),
         ])
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+        vp.view.addStream(tab_data.semStream)
 
-        # Create Stream Bar Controller
-        self._stream_controller = streamcont.FastEMProjectBarController(
+        # Project bar controller
+        self._projectbar_controller = streamcont.FastEMProjectBarController(
             tab_data,
             panel.pnl_fastem_projects,
             view_ctrl=self.view_controller,
         )
-        main_data.is_acquiring.subscribe(self.on_acquisition)
 
-        self._calibration_controller = streamcont.FastEMCalibrationController(
+        # Controller for calibration regions
+        self._calibrationbar_controller = streamcont.FastEMCalibrationController(
             tab_data,
             panel.pnl_fastem_calibration,
             view_ctrl=self.view_controller,
         )
 
-
-
+        # Acquisition controller
         self._acquisition_controller = acqcont.FastEMAcquiController(
             tab_data,
             panel,
-            self._stream_controller
+            self._projectbar_controller,
+            self._calibrationbar_controller
         )
+        main_data.is_acquiring.subscribe(self.on_acquisition)
 
     @property
-    def streambar_controller(self):
-        return self._stream_controller
+    def projectbar_controller(self):
+        return self._projectbar_controller
 
     @property
     def acquisition_controller(self):
         return self._acquisition_controller
 
+    @property
+    def calibrationbar_controller(self):
+        return self._calibrationbar_controller
+
     def on_acquisition(self, is_acquiring):
-        # TODO: Make sure nothing can be modified during acquisition
-
-        self.tb.enable(not is_acquiring)
-        self.panel.vp_sparc_tl.Enable(not is_acquiring)
-        # TODO: Leave the canvas accessible, but only forbid moving the stage and
-        # if the mpp changes, do not update the horizontalFoV of the e-beam.
-        # For now, as a hack, we re-enable the legend to allow changing the merge
-        # ratio between SEM and CL.
-        if is_acquiring:
-            self.panel.vp_sparc_tl.bottom_legend.Enable(True)
-
-        self.panel.btn_sparc_change_file.Enable(not is_acquiring)
+        # Don't allow changes to acquisition/calibration ROIs during acquisition
+        pass
+        #self.projectbar_controller.Enable(False)
+        #self.calibrationbar_controller.Enable(False)
 
     def Show(self, show=True):
         super(FastEMAcquisitionTab, self).Show(show)
 
-
-    def terminate(self):
-        # make sure the streams are stopped
-        for s in self.tab_data_model.streams.value:
-            s.is_active.value = False
-
     @classmethod
     def get_display_priority(cls, main_data):
-        # For SPARCs
+        # Tab is used only for FastEM
         if main_data.role in ("fast-em",):
             return 1
         else:
@@ -2396,7 +2409,11 @@ class AnalysisTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data):
-        return 0
+        # Don't display tab for FastEM
+        if main_data.role in ("fast-em",):
+            return None
+        else:
+            return 0
 
 
 class SecomAlignTab(Tab):
